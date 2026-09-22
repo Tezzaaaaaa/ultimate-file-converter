@@ -377,7 +377,7 @@ format.onchange = () => {
   files.forEach(file => {
     const kind = fileKind(file);
     const label = Object.keys(formats).find(key => formats[key] === target);
-    if (canConvert(kind, label)) file.output = target;
+    if (canConvert(kind, label, file.name)) file.output = target;
   });
   render();
 };
