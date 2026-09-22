@@ -33,6 +33,21 @@ The project started as a macOS audio conversion Shortcut and has been rebuilt as
 
 Support ultimately depends on the codecs and formats included in the browser FFmpeg build.
 
+## Conversion pathways
+
+The converter accounts for the media relationships explicitly rather than assuming every file can become every other file:
+
+| Source | Supported outputs |
+|---|---|
+| Audio | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI |
+| Video / GIF | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI, GIF, JPG, PNG, WEBP |
+| Image | JPG, PNG, WEBP, GIF, MP4, MOV, WEBM, MKV, AVI |
+| Other files | Not offered until a real media conversion path exists |
+
+Audio → video creates a simple black video canvas with the source audio. Image → video creates a short five-second video. Video → image extracts the first frame. Image → GIF creates a short animated GIF. Image ↔ audio is not presented as a conversion because it has no meaningful media representation.
+
+Each queued file has its own output selector, so mixed batches do not have to share one conversion path. The top-level output selector can apply a compatible format across the current batch.
+
 ## Features
 
 - Real browser-side conversion
