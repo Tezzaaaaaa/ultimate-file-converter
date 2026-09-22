@@ -68,7 +68,8 @@ const allowed = {
   File: []
 };
 
-function canConvert(kind, label) {
+function canConvert(kind, label, fileName = '') {
+  if (/\.gif$/i.test(fileName) && kind === 'Video' && groups.Audio.includes(label)) return false;
   return allowed[kind]?.includes(label) === true;
 }
 
@@ -307,7 +308,7 @@ async function convertOne(file, index, total) {
   const kind = fileKind(file);
   const ext = file.output || defaultOutput(kind);
 
-  if (!canConvert(kind, Object.keys(formats).find(label => formats[label] === ext))) {
+  if (!canConvert(kind, Object.keys(formats).find(label => formats[label] === ext), file.name)) {
     throw new Error(file.name + ': unsupported conversion path to ' + ext.toUpperCase());
   }
 
