@@ -48,8 +48,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
 }[c]));
 
 function fileKind(file) {
+  if (file.type.startsWith('video/') || videoExt.test(file.name) || /\\.gif$/i.test(file.name)) return 'Video';
   if (file.type.startsWith('image/') || imageExt.test(file.name)) return 'Image';
-  if (file.type.startsWith('video/') || videoExt.test(file.name)) return 'Video';
   if (file.type.startsWith('audio/') || audioExt.test(file.name)) return 'Audio';
   return 'File';
 }
@@ -62,7 +62,7 @@ function fileKind(file) {
  * because there is no meaningful media representation to produce.
  */
 const allowed = {
-  Audio: [...groups.Audio, ...groups.Video],
+  Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI'],
   Video: [...groups.Audio, ...groups.Video, ...groups.Image],
   Image: [...groups.Image, ...groups.Video],
   File: []
