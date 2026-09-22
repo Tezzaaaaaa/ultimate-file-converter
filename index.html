@@ -19,7 +19,7 @@
   <div class="title">
     <p class="eyebrow">UNIVERSAL MEDIA CONVERTER</p>
     <h1>Convert to anything.</h1>
-    <p>Audio, video and images. Drop in your files, choose an output, and convert them directly in your browser.</p>
+    <p>Audio, video and images. Add your files, choose an output for each, and convert directly in your browser.</p>
   </div>
 
   <div class="workspace">
@@ -33,7 +33,7 @@
     <div class="arrow">→</div>
 
     <div class="output">
-      <label for="format">Convert to</label>
+      <label for="format">Apply output to compatible files</label>
       <select id="format" aria-label="Output format">
         <optgroup label="Audio">
           <option>MP3</option><option>M4A</option><option>AAC</option><option>WAV</option><option>FLAC</option><option>OGG</option><option>OPUS</option>
@@ -44,7 +44,7 @@
         <optgroup label="Images">
           <option>JPG</option><option>PNG</option><option>WEBP</option>
         </optgroup>
-      </select>
+      </select><small id="formatHint">Each file can use its own compatible output format.</small>
     </div>
 
     <button class="convert" id="convert" disabled>Convert</button>
