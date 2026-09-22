@@ -35,7 +35,7 @@ const groups = {
   Image: ['JPG', 'PNG', 'WEBP']
 };
 
-const imageExt = /\.(jpg|jpeg|png|webp|gif|bmp|tif|tiff)$/i;
+const imageExt = /\.(jpg|jpeg|png|webp|bmp|tif|tiff)$/i;
 const videoExt = /\.(mp4|mov|m4v|webm|mkv|avi|wmv|flv|mpeg|mpg|3gp)$/i;
 const audioExt = /\.(mp3|wav|m4a|aac|flac|ogg|opus|wma|aiff|aif)$/i;
 
@@ -48,7 +48,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
 }[c]));
 
 function fileKind(file) {
-  if (file.type.startsWith('video/') || videoExt.test(file.name) || /\\.gif$/i.test(file.name)) return 'Video';
+  if (file.type.startsWith('video/') || videoExt.test(file.name) || /\.gif$/i.test(file.name)) return 'Video';
   if (file.type.startsWith('image/') || imageExt.test(file.name)) return 'Image';
   if (file.type.startsWith('audio/') || audioExt.test(file.name)) return 'Audio';
   return 'File';
