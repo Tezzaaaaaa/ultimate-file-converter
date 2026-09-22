@@ -73,9 +73,9 @@ function canConvert(kind, label, fileName = '') {
   return allowed[kind]?.includes(label) === true;
 }
 
-function optionsFor(kind, selected) {
+function optionsFor(kind, selected, fileName = '') {
   const labels = allowed[kind] || [];
-  return labels.map(label => {
+  return labels.filter(label => canConvert(kind, label, fileName)).map(label => {
     const value = formats[label];
     return '<option value="' + esc(value) + '"' +
       (value === selected ? ' selected' : '') + '>' + esc(label) + '</option>';
@@ -99,7 +99,7 @@ function render() {
   items.innerHTML = files.map((file, index) => {
     const kind = fileKind(file);
     const selected = file.output || defaultOutput(kind);
-    const choices = optionsFor(kind, selected);
+    const choices = optionsFor(kind, selected, file.name);
 
     return '<div class="item">' +
       '<div class="file-info">' +
