@@ -168,7 +168,7 @@ function withTimeout(promise, ms, message) {
 async function loadEngine() {
   if (loaded) return;
 
-  setProgress(4, 'Loading conversion engine (first run downloads ~30 MB)…');
+  setProgress(4, 'Downloading conversion engine (v2, ~30 MB)…');
 
   ffmpeg = new FFmpeg();
   ffmpeg.on('log', ({ message }) => {
@@ -178,12 +178,20 @@ async function loadEngine() {
   ffmpeg.on('progress', ({ progress }) => onFileProgress(progress));
 
   try {
-    // ffmpeg.load() never rejects when a worker or core URL fails, so it is wrapped in a timeout.
-    await withTimeout(ffmpeg.load({
-      classWorkerURL: WORKER_URL,
-      coreURL: await toBlobURL(CORE_BASE + 'ffmpeg-core.js', 'text/javascript'),
-      wasmURL: await toBlobURL(CORE_BASE + 'ffmpeg-core.wasm', 'application/wasm')
-    }), 120000, 'Conversion engine failed to load. Check your connection and try again.');
+    // Browsers block cross-origin Workers, so the worker is a same-origin blob that imports the CDN worker.
+    const workerURL = URL.createObjectURL(
+      new Blob(['import ' + JSON.stringify(WORKER_URL) + ';'], { type: 'text/javascript' })
+    );
+    const coreURL = await toBlobURL(CORE_BASE + 'ffmpeg-core.js', 'text/javascript');
+    const wasmURL = await toBlobURL(CORE_BASE + 'ffmpeg-core.wasm', 'application/wasm');
+
+    setProgress(8, 'Starting conversion engine…');
+    // ffmpeg.load() never rejects when the worker fails to start, so it is wrapped in a timeout.
+    await withTimeout(
+      ffmpeg.load({ classWorkerURL: workerURL, coreURL, wasmURL }),
+      60000,
+      'Conversion engine failed to start. Open the browser console for details.'
+    );
   } catch (error) {
     try { ffmpeg.terminate(); } catch {}
     ffmpeg = null;
