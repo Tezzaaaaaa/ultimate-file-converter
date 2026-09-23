@@ -1,4 +1,4 @@
-import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm';
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm';
 import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
 
 const input = document.querySelector('#file');
@@ -186,7 +186,11 @@ async function loadEngine() {
   const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
   await ffmpeg.load({
     coreURL: await toBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
-    wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm')
+    wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
+    classWorkerURL: await toBlobURL(
+      'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/814.ffmpeg.js',
+      'text/javascript'
+    )
   });
 
   ffmpeg.on('progress', ({ progress: value }) => {
