@@ -1,5 +1,5 @@
 import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm';
-import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
+import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
 
 const input = document.querySelector('#file');
 const drop = document.querySelector('#drop');
@@ -17,7 +17,13 @@ const downloads = document.querySelector('#downloads');
 const sourceTitle = document.querySelector('#sourceTitle');
 const sourceHint = document.querySelector('#sourceHint');
 
-const ffmpeg = new FFmpeg();
+const CDN = 'https://cdn.jsdelivr.net/npm/';
+const CORE_BASE = CDN + '@ffmpeg/core@0.12.10/dist/esm/';
+const WORKER_URL = CDN + '@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js';
+
+let ffmpeg = null;
+let ffmpegLog = [];
+let onFileProgress = () => {};
 let loaded = false;
 let converting = false;
 let files = [];
@@ -151,18 +157,49 @@ function setProgress(value, label) {
   progressLabel.textContent = label;
 }
 
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function loadEngine() {
   if (loaded) return;
 
-  setProgress(4, 'Loading conversion engine…');
+  setProgress(4, 'Loading conversion engine (first run downloads ~30 MB)…');
 
-  await ffmpeg.load({
-    coreURL: new URL('./ffmpeg-core.js', import.meta.url).href,
-    wasmURL: new URL('./ffmpeg-core.wasm', import.meta.url).href,
-    classWorkerURL: new URL('./ffmpeg-worker.js', import.meta.url).href
+  ffmpeg = new FFmpeg();
+  ffmpeg.on('log', ({ message }) => {
+    ffmpegLog.push(message);
+    if (ffmpegLog.length > 20) ffmpegLog.shift();
   });
+  ffmpeg.on('progress', ({ progress }) => onFileProgress(progress));
+
+  try {
+    // ffmpeg.load() never rejects when a worker or core URL fails, so it is wrapped in a timeout.
+    await withTimeout(ffmpeg.load({
+      classWorkerURL: WORKER_URL,
+      coreURL: await toBlobURL(CORE_BASE + 'ffmpeg-core.js', 'text/javascript'),
+      wasmURL: await toBlobURL(CORE_BASE + 'ffmpeg-core.wasm', 'application/wasm')
+    }), 120000, 'Conversion engine failed to load. Check your connection and try again.');
+  } catch (error) {
+    try { ffmpeg.terminate(); } catch {}
+    ffmpeg = null;
+    throw error;
+  }
 
   loaded = true;
+}
+
+async function run(args, name) {
+  ffmpegLog = [];
+  const code = await ffmpeg.exec(args);
+  if (code !== 0) {
+    const last = ffmpegLog[ffmpegLog.length - 1];
+    throw new Error(name + ': conversion failed' + (last ? ' (' + last + ')' : ''));
+  }
 }
 
 function audioCodec(ext) {
@@ -192,6 +229,17 @@ function commandFor(sourceKind, ext, inputName, outputName) {
     return args;
   }
 
+  // Image inputs: -loop and -framerate are input options, so they must come before -i.
+  if (sourceKind === 'Image' && ext === 'gif') {
+    return ['-y', '-loop', '1', '-framerate', '12', '-t', '3', '-i', inputName,
+      '-vf', 'scale=1280:-1:flags=lanczos', '-loop', '0', outputName];
+  }
+
+  if (sourceKind === 'Image' && groups.Video.some(l => formats[l] === ext)) {
+    return ['-y', '-loop', '1', '-framerate', '30', '-t', '5', '-i', inputName,
+      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', ...videoCodec(ext), outputName];
+  }
+
   args.push('-i', inputName);
 
   if (sourceKind === 'Video' && groups.Audio.some(l => formats[l] === ext)) {
@@ -207,17 +255,12 @@ function commandFor(sourceKind, ext, inputName, outputName) {
     return args;
   }
 
-  if (sourceKind === 'Image' && groups.Video.some(l => formats[l] === ext && ext !== 'gif')) {
-    args.push('-loop', '1', '-t', '5', '-framerate', '30', ...videoCodec(ext), outputName);
-    return args;
-  }
-
   if (ext === 'gif') {
     args.push('-vf', 'fps=12,scale=1280:-1:flags=lanczos', outputName);
     return args;
   }
 
-  if (groups.Audio.some(l => formats[l] === ext)) { args.push(...audioCodec(ext), outputName); return args; }
+  if (groups.Audio.some(l => formats[l] === ext)) { args.push('-vn', ...audioCodec(ext), outputName); return args; }
   if (groups.Video.some(l => formats[l] === ext)) { args.push(...videoCodec(ext), outputName); return args; }
   if (groups.Image.some(l => formats[l] === ext)) {
     if (ext === 'jpg') args.push('-frames:v', '1', '-q:v', '3');
@@ -253,21 +296,30 @@ async function convertOne(file, index, total) {
   const out = index + '-out.' + ext;
 
   await ffmpeg.writeFile(inName, await fetchFile(file));
-  setProgress(10 + (index / total) * 80, 'Converting ' + file.name);
+
+  const base = 10 + (index / total) * 90;
+  const span = 90 / total;
+  const message = 'Converting ' + file.name;
+  setProgress(base, message);
+  onFileProgress = p => {
+    if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
+  };
 
   if (kind === 'Video' && ext === 'gif') {
     const pal = 'pal-' + index + '.png';
-    await ffmpeg.exec(['-y', '-i', inName, '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full', pal]);
-    await ffmpeg.exec(['-y', '-i', inName, '-i', pal, '-filter_complex',
+    await run(['-y', '-i', inName, '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full', pal], file.name);
+    await run(['-y', '-i', inName, '-i', pal, '-filter_complex',
       '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse[v]',
-      '-map', '[v]', '-an', '-loop', '0', out]);
+      '-map', '[v]', '-an', '-loop', '0', out], file.name);
     await ffmpeg.deleteFile(pal).catch(() => {});
   } else {
-    await ffmpeg.exec(commandFor(kind, ext, inName, out));
+    await run(commandFor(kind, ext, inName, out), file.name);
   }
 
+  onFileProgress = () => {};
+
   const data = await ffmpeg.readFile(out);
-  const blob = new Blob([data.buffer], { type: mimeFor(ext) });
+  const blob = new Blob([data], { type: mimeFor(ext) });
   const url = URL.createObjectURL(blob);
 
   results.push({
@@ -352,6 +404,7 @@ convert.onclick = async () => {
     setProgress(0, error?.message || 'Conversion failed');
     convert.textContent = 'Try again';
   } finally {
+    onFileProgress = () => {};
     converting = false;
     render();
     if (files.length) convert.disabled = false;
