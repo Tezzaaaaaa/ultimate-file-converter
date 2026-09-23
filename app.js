@@ -187,7 +187,7 @@ async function loadEngine() {
   await ffmpeg.load({
     coreURL: await toBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
     wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
-    classWorkerURL: './ffmpeg-worker.js'
+    classWorkerURL: new URL('./ffmpeg-worker.js', import.meta.url).href
   });
 
   ffmpeg.on('log', ({ message }) => console.debug('[FFmpeg]', message));
