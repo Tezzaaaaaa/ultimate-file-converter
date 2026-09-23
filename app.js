@@ -186,7 +186,8 @@ async function loadEngine() {
   const base = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
   await ffmpeg.load({
     coreURL: await toBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
-    wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm')
+    wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
+    workerURL: await toBlobURL(base + '/ffmpeg-core.worker.js', 'text/javascript')
   });
 
   ffmpeg.on('progress', ({ progress: value }) => {
