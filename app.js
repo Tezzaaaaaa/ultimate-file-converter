@@ -228,12 +228,23 @@ function videoCodec(ext) {
   return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k'];
 }
 
+// Formats whose muxers can carry an attached cover image.
+const coverFormats = ['mp3', 'm4a', 'flac'];
+
+// Copies tags from input `src` and uses tag-friendly container options.
+function tagArgs(ext, src = 0) {
+  const args = ['-map_metadata', String(src)];
+  if (ext === 'mp3') args.push('-id3v2_version', '3', '-write_id3v1', '1');
+  if (['m4a', 'mp4', 'mov'].includes(ext)) args.push('-movflags', '+use_metadata_tags');
+  return args;
+}
+
 function commandFor(sourceKind, ext, inputName, outputName) {
   const args = ['-y'];
 
   if (sourceKind === 'Audio' && groups.Video.some(l => formats[l] === ext && ext !== 'gif')) {
     args.push('-f', 'lavfi', '-i', 'color=c=black:s=1280x720:r=30', '-i', inputName,
-      '-map', '0:v:0', '-map', '1:a:0', '-shortest', ...videoCodec(ext), outputName);
+      '-map', '0:v:0', '-map', '1:a:0', ...tagArgs(ext, 1), '-shortest', ...videoCodec(ext), outputName);
     return args;
   }
 
@@ -251,7 +262,7 @@ function commandFor(sourceKind, ext, inputName, outputName) {
   args.push('-i', inputName);
 
   if (sourceKind === 'Video' && groups.Audio.some(l => formats[l] === ext)) {
-    args.push('-vn', ...audioCodec(ext), outputName);
+    args.push('-vn', ...tagArgs(ext), ...audioCodec(ext), outputName);
     return args;
   }
 
@@ -268,8 +279,14 @@ function commandFor(sourceKind, ext, inputName, outputName) {
     return args;
   }
 
-  if (groups.Audio.some(l => formats[l] === ext)) { args.push('-vn', ...audioCodec(ext), outputName); return args; }
-  if (groups.Video.some(l => formats[l] === ext)) { args.push(...videoCodec(ext), outputName); return args; }
+  if (groups.Audio.some(l => formats[l] === ext)) {
+    // Audio files: keep the cover art (an attached picture stream) where the target format supports it.
+    if (sourceKind === 'Audio' && coverFormats.includes(ext)) args.push('-map', '0:a:0', '-map', '0:v:0?', '-c:v', 'copy');
+    else args.push('-vn');
+    args.push(...tagArgs(ext), ...audioCodec(ext), outputName);
+    return args;
+  }
+  if (groups.Video.some(l => formats[l] === ext)) { args.push(...tagArgs(ext), ...videoCodec(ext), outputName); return args; }
   if (groups.Image.some(l => formats[l] === ext)) {
     if (ext === 'jpg') args.push('-frames:v', '1', '-q:v', '3');
     else if (ext === 'webp') args.push('-frames:v', '1', '-c:v', 'libwebp', '-quality', '90');
