@@ -318,7 +318,30 @@ async function convertOne(file, index, total) {
   await ffmpeg.writeFile(inputName, await fetchFile(file));
   setProgress(10 + index / total * 80, 'Preparing ' + file.name);
 
-  await ffmpeg.exec(commandFor(kind, ext, inputName, output));
+  if (kind === 'Video' && ext === 'gif') {
+    const palette = 'palette-' + index + '.png';
+
+    await ffmpeg.exec([
+      '-y',
+      '-i', inputName,
+      '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full',
+      palette
+    ]);
+
+    await ffmpeg.exec([
+      '-y',
+      '-i', inputName,
+      '-i', palette,
+      '-filter_complex',
+      '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse',
+      '-loop', '0',
+      output
+    ]);
+
+    await ffmpeg.deleteFile(palette).catch(() => {});
+  } else {
+    await ffmpeg.exec(commandFor(kind, ext, inputName, output));
+  }
 
   const data = await ffmpeg.readFile(output);
   const blob = new Blob([data.buffer], { type: mimeFor(ext) });
