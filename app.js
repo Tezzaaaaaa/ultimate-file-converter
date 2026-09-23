@@ -187,8 +187,10 @@ async function loadEngine() {
   await ffmpeg.load({
     coreURL: await toBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
     wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
-    classWorkerURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js'
+    classWorkerURL: './ffmpeg-worker.js'
   });
+
+  ffmpeg.on('log', ({ message }) => console.debug('[FFmpeg]', message));
 
   ffmpeg.on('progress', ({ progress: value }) => {
     setProgress(10 + value * 88, 'Converting ' + Math.round(value * 100) + '%');
@@ -254,10 +256,11 @@ function commandFor(sourceKind, ext, inputName, outputName) {
   }
 
   if (sourceKind === 'Image' && groups.Video.some(label => formats[label] === ext)) {
+    args.push('-loop', '1', '-i', inputName);
     if (ext === 'gif') {
-      args.push('-loop', '1', '-t', '3', '-vf', 'fps=12,scale=1280:-1:flags=lanczos');
+      args.push('-t', '3', '-vf', 'fps=12,scale=1280:-1:flags=lanczos');
     } else {
-      args.push('-loop', '1', '-t', '5', '-pix_fmt', 'yuv420p', ...videoCodec(ext));
+      args.push('-t', '5', '-pix_fmt', 'yuv420p', ...videoCodec(ext));
     }
     args.push(outputName);
     return args;
@@ -322,14 +325,15 @@ async function convertOne(file, index, total) {
   if (kind === 'Video' && ext === 'gif') {
     const palette = 'palette-' + index + '.png';
 
-    await ffmpeg.exec([
+    const paletteExit = await ffmpeg.exec([
       '-y',
       '-i', inputName,
       '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full',
       palette
     ]);
+    if (paletteExit !== 0) throw new Error(file.name + ': GIF palette generation failed (FFmpeg exit ' + paletteExit + ')');
 
-    await ffmpeg.exec([
+    const gifExit = await ffmpeg.exec([
       '-y',
       '-i', inputName,
       '-i', palette,
@@ -340,14 +344,16 @@ async function convertOne(file, index, total) {
       '-loop', '0',
       output
     ]);
+    if (gifExit !== 0) throw new Error(file.name + ': GIF conversion failed (FFmpeg exit ' + gifExit + ')');
 
     await ffmpeg.deleteFile(palette).catch(() => {});
   } else {
-    await ffmpeg.exec(commandFor(kind, ext, inputName, output));
+    const exitCode = await ffmpeg.exec(commandFor(kind, ext, inputName, output));
+    if (exitCode !== 0) throw new Error(file.name + ': conversion failed (FFmpeg exit ' + exitCode + ')');
   }
 
   const data = await ffmpeg.readFile(output);
-  const blob = new Blob([data.buffer], { type: mimeFor(ext) });
+  const blob = new Blob([data], { type: mimeFor(ext) });
   const url = URL.createObjectURL(blob);
 
   results.push({
@@ -396,13 +402,14 @@ clear.onclick = () => {
   render();
   updateSourceCopy();
   progress.hidden = true;
+  input.value = '';
 };
 
 format.onchange = () => {
-  const target = format.value;
+  const label = format.value;
+  const target = formats[label];
   files.forEach(file => {
     const kind = fileKind(file);
-    const label = Object.keys(formats).find(key => formats[key] === target);
     if (canConvert(kind, label, file.name)) file.output = target;
   });
   render();
