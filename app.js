@@ -333,7 +333,9 @@ async function convertOne(file, index, total) {
       '-i', inputName,
       '-i', palette,
       '-filter_complex',
-      '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse',
+      '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse[v]',
+      '-map', '[v]',
+      '-an',
       '-loop', '0',
       output
     ]);
