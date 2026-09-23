@@ -187,10 +187,7 @@ async function loadEngine() {
   await ffmpeg.load({
     coreURL: await toBlobURL(base + '/ffmpeg-core.js', 'text/javascript'),
     wasmURL: await toBlobURL(base + '/ffmpeg-core.wasm', 'application/wasm'),
-    classWorkerURL: await toBlobURL(
-      'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/814.ffmpeg.js',
-      'text/javascript'
-    )
+    classWorkerURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js'
   });
 
   ffmpeg.on('progress', ({ progress: value }) => {
