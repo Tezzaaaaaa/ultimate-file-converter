@@ -283,18 +283,17 @@ async function fetchWithProgress(url, mime, label) {
 
 async function loadEngine() {
   if (engineLoaded) return;
-
   setProgress(2, 'Loading engine…');
 
-  const bases = [
-    CORE_URL,
-    'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd',
-    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd'
-  ];
+  await ffmpeg.load({
+    coreURL: new URL('./ffmpeg-core.js', import.meta.url).href,
+    wasmURL: new URL('./ffmpeg-core.wasm', import.meta.url).href,
+    classWorkerURL: new URL('./ffmpeg-worker.js', import.meta.url).href
+  });
 
-  let lastError = null;
-
-  for (const base of bases) {
+  engineLoaded = true;
+  setProgress(12, 'Ready');
+}
     try {
       setProgress(2, 'Downloading converter core…');
 
