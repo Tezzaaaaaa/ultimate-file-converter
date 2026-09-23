@@ -255,16 +255,67 @@ function commandFor(kind, ext, inName, outName) {
   throw new Error('Unsupported path to ' + ext.toUpperCase());
 }
 
-async function loadEngine() {
-  if (engineLoaded) return;
-  setProgress(2, 'Loading engine…');
-  await ffmpeg.load({
-    coreURL: await toBlobURL(`${CORE_URL}/ffmpeg-core.js`, 'text/javascript'),
-    wasmURL: await toBlobURL(`${CORE_URL}/ffmpeg-core.wasm`, 'application/wasm')
-  });
-  engineLoaded = true;
+async function fetchWithProgress(url, mime, label) {
+  const response = await fetch(url, { mode: 'cors' });
+  if (!response.ok) throw new Error(`${label} failed (HTTP ${response.status})`);
+
+  const total = Number(response.headers.get('Content-Length')) || 0;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (total > 0) {
+      const pct = (received / total) * 100;
+      setProgress(2 + pct * 0.08, `Downloading ${label} — ${humanSize(received)} of ${humanSize(total)}`);
+    } else {
+      setProgress(2 + Math.min(8, received / 1000000), `Downloading ${label} — ${humanSize(received)}`);
+    }
+  }
+
+  const blob = new Blob(chunks, { type: mime });
+  return URL.createObjectURL(blob);
 }
 
+async function loadEngine() {
+  if (engineLoaded) return;
+
+  setProgress(2, 'Loading engine…');
+
+  const bases = [
+    CORE_URL,
+    'https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd',
+    'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd'
+  ];
+
+  let lastError = null;
+
+  for (const base of bases) {
+    try {
+      setProgress(2, 'Downloading converter core…');
+
+      const [coreURL, wasmURL] = await Promise.all([
+        fetchWithProgress(`${base}/ffmpeg-core.js`, 'text/javascript', 'core'),
+        fetchWithProgress(`${base}/ffmpeg-core.wasm`, 'application/wasm', 'wasm')
+      ]);
+
+      setProgress(11, 'Starting engine…');
+      await ffmpeg.load({ coreURL, wasmURL });
+      engineLoaded = true;
+      setProgress(12, 'Ready');
+      return;
+    } catch (err) {
+      console.warn('Engine load failed for', base, err);
+      lastError = err;
+    }
+  }
+
+  throw new Error(`Could not load converter (${lastError?.message || 'network error'}). Check your connection and try again.`);
+}
 async function convertOne(file, index, total) {
   const kind = file.kind;
   const ext = file.output || defaultOutput(kind);
