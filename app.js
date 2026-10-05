@@ -65,8 +65,8 @@ function fileKind(file) {
 }
 
 const allowed = {
-  Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI'],
-  Video: [...groups.Audio, ...groups.Video, ...groups.Image],
+  Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'ZIP'],
+  Video: [...groups.Audio, ...groups.Video, ...groups.Image, 'ZIP'],
   Image: [...groups.Image, ...groups.Video, 'ZIP'],
   File: ['ZIP']
 };
