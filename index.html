@@ -15,21 +15,22 @@
     <span class="sun">◐</span><span class="moon">◑</span>
   </button>
 </header>
+
 <main>
   <section class="hero">
     <div class="eyebrow">Universal file converter</div>
     <h1>Convert your files.</h1>
-    <p>Choose a file, choose an output format, then convert. Everything happens in your browser.</p>
+    <p>Choose your files, select an output format, and convert them in your browser.</p>
   </section>
 
-  <ol class="steps" aria-label="Conversion steps">
-    <li class="step active"><span>1</span><div><strong>Add files</strong><small>Choose one or more files</small></div></li>
-    <li class="step"><span>2</span><div><strong>Choose format</strong><small>Pick the output you need</small></div></li>
-    <li class="step"><span>3</span><div><strong>Convert & download</strong><small>Get your finished files</small></div></li>
-  </ol>
-
   <section class="panel">
-    <div class="section-heading"><div><h2>1. Add your files</h2><p>Drag and drop files here, or choose them from your device.</p></div></div>
+    <div class="section-heading">
+      <div>
+        <h2>Add files</h2>
+        <p>Choose one or more files, or drag them here.</p>
+      </div>
+    </div>
+
     <label class="drop" id="drop">
       <input id="file" type="file" multiple hidden>
       <span class="drop-icon">+</span>
@@ -38,32 +39,43 @@
     </label>
 
     <div class="format-card">
-      <div class="section-heading compact"><div><h2>2. Choose the output</h2><p>Use the selector below for all compatible files. You can also change each file individually.</p></div></div>
+      <div class="section-heading compact">
+        <div>
+          <h2>Choose output</h2>
+          <p>Select the format to use for your files. Individual formats can be changed below.</p>
+        </div>
+      </div>
+
       <div class="row">
-      <label class="select-wrap">
-        <span>Convert to</span>
-        <select id="format">
-          <optgroup label="Audio">
-            <option>MP3</option><option>M4A</option><option>AAC</option><option>WAV</option><option>FLAC</option><option>OGG</option><option>OPUS</option>
-          </optgroup>
-          <optgroup label="Video">
-            <option>MP4</option><option>MOV</option><option>WEBM</option><option>MKV</option><option>AVI</option><option>GIF</option>
-          </optgroup>
-          <optgroup label="Images">
-            <option>JPG</option><option>PNG</option><option>WEBP</option><option>BMP</option><option>TIFF</option>
-          </optgroup>
-          <optgroup label="Archive">
-            <option>ZIP</option>
-          </optgroup>
-        </select>
-      </label>
-      <button id="convert" class="convert" disabled><span>Convert files</span><span class="arrow">→</span></button>
+        <label class="select-wrap">
+          <span>Convert to</span>
+          <select id="format">
+            <optgroup label="Audio">
+              <option>MP3</option><option>M4A</option><option>AAC</option><option>WAV</option><option>FLAC</option><option>OGG</option><option>OPUS</option>
+            </optgroup>
+            <optgroup label="Video">
+              <option>MP4</option><option>MOV</option><option>WEBM</option><option>MKV</option><option>AVI</option><option>GIF</option>
+            </optgroup>
+            <optgroup label="Images">
+              <option>JPG</option><option>PNG</option><option>WEBP</option><option>BMP</option><option>TIFF</option>
+            </optgroup>
+            <optgroup label="Archive">
+              <option>ZIP</option>
+            </optgroup>
+          </select>
+        </label>
+        <button id="convert" class="convert" disabled><span>Convert files</span><span class="arrow">→</span></button>
       </div>
     </div>
   </section>
 
   <section class="queue" id="queue" hidden>
-    <div class="section-heading compact"><div><h2>3. Review your files</h2><p>Confirm the output format for each file before converting.</p></div></div>
+    <div class="section-heading compact">
+      <div>
+        <h2>Review & convert</h2>
+        <p>Check each file and change its output format if needed.</p>
+      </div>
+    </div>
     <div class="queue-head">
       <span id="queueTitle">Files</span>
       <button class="link" id="clear" type="button">Clear all</button>
@@ -72,7 +84,12 @@
   </section>
 
   <section class="progress" id="progress" hidden>
-    <div class="section-heading compact"><div><h2>Conversion progress</h2><p>Your files are being processed locally.</p></div></div>
+    <div class="section-heading compact">
+      <div>
+        <h2>Converting</h2>
+        <p>Your files are being processed locally.</p>
+      </div>
+    </div>
     <div class="progress-top">
       <span id="progressLabel">Preparing…</span>
       <span id="progressValue">0%</span>
@@ -81,18 +98,25 @@
   </section>
 
   <section class="downloads" id="downloads" hidden>
-    <div class="section-heading compact"><div><h2>4. Your files are ready</h2><p>Download individual files or download everything at once.</p></div></div>
+    <div class="section-heading compact">
+      <div>
+        <h2>Ready</h2>
+        <p>Download your converted files.</p>
+      </div>
+    </div>
     <div class="downloads-head">
-      <span>Ready</span>
+      <span>Files</span>
       <button class="link" id="downloadAll" type="button">Download all</button>
     </div>
     <div id="downloadList"></div>
   </section>
 </main>
+
 <footer>
   <span>Private by design — files stay on your device.</span>
   <span>Media conversion · Images · ZIP packaging</span>
 </footer>
+
 <script type="module" src="app.js"></script>
 </body>
 </html>
