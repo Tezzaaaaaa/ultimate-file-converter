@@ -14,8 +14,8 @@ const progressLabel = document.querySelector('#progressLabel');
 const progressValue = document.querySelector('#progressValue');
 const progressBar = document.querySelector('#progressBar');
 const downloads = document.querySelector('#downloads');
-const sourceTitle = document.querySelector('#sourceTitle');
-const sourceHint = document.querySelector('#sourceHint');
+const sourceTitle = document.querySelector('#dropTitle');
+const sourceHint = document.querySelector('#dropHint');
 
 const CDN = 'https://cdn.jsdelivr.net/npm/';
 const CORE_BASE = CDN + '@ffmpeg/core@0.12.10/dist/esm/';
@@ -32,13 +32,13 @@ let results = [];
 const formats = {
   MP3: 'mp3', M4A: 'm4a', AAC: 'aac', WAV: 'wav', FLAC: 'flac', OGG: 'ogg', OPUS: 'opus',
   MP4: 'mp4', MOV: 'mov', WEBM: 'webm', MKV: 'mkv', AVI: 'avi', GIF: 'gif',
-  JPG: 'jpg', PNG: 'png', WEBP: 'webp'
+  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff'
 };
 
 const groups = {
   Audio: ['MP3', 'M4A', 'AAC', 'WAV', 'FLAC', 'OGG', 'OPUS'],
   Video: ['MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'GIF'],
-  Image: ['JPG', 'PNG', 'WEBP']
+  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF']
 };
 
 const imageExt = /\.(jpg|jpeg|png|webp|bmp|tif|tiff)$/i;
@@ -304,7 +304,7 @@ function mimeFor(ext) {
     flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/opus',
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
     mkv: 'video/x-matroska', avi: 'video/x-msvideo', gif: 'image/gif',
-    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp'
+    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff'
   }[ext] || 'application/octet-stream';
 }
 
