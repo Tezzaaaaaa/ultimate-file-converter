@@ -1,5 +1,6 @@
 import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm';
 import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
+import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
 
 const input = document.querySelector('#file');
 const drop = document.querySelector('#drop');
@@ -34,13 +35,14 @@ let results = [];
 const formats = {
   MP3: 'mp3', M4A: 'm4a', AAC: 'aac', WAV: 'wav', FLAC: 'flac', OGG: 'ogg', OPUS: 'opus',
   MP4: 'mp4', MOV: 'mov', WEBM: 'webm', MKV: 'mkv', AVI: 'avi', GIF: 'gif',
-  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff'
+  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', ZIP: 'zip'
 };
 
 const groups = {
   Audio: ['MP3', 'M4A', 'AAC', 'WAV', 'FLAC', 'OGG', 'OPUS'],
   Video: ['MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'GIF'],
-  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF']
+  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF'],
+  Archive: ['ZIP']
 };
 
 const imageExt = /\.(jpg|jpeg|png|webp|bmp|tif|tiff)$/i;
@@ -65,8 +67,8 @@ function fileKind(file) {
 const allowed = {
   Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI'],
   Video: [...groups.Audio, ...groups.Video, ...groups.Image],
-  Image: [...groups.Image, ...groups.Video],
-  File: []
+  Image: [...groups.Image, ...groups.Video, 'ZIP'],
+  File: ['ZIP']
 };
 
 function canConvert(kind, label, fileName = '') {
@@ -78,7 +80,7 @@ function defaultOutput(kind) {
   if (kind === 'Audio') return 'mp3';
   if (kind === 'Video') return 'mp4';
   if (kind === 'Image') return 'png';
-  return '';
+  return 'zip';
 }
 
 function render() {
@@ -306,7 +308,7 @@ function mimeFor(ext) {
     flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/opus',
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
     mkv: 'video/x-matroska', avi: 'video/x-msvideo', gif: 'image/gif',
-    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff'
+    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff', zip: 'application/zip'
   }[ext] || 'application/octet-stream';
 }
 
@@ -321,6 +323,19 @@ async function convertOne(file, index, total) {
 
   const inName = 'input-' + index + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const out = index + '-out.' + ext;
+
+  if (ext === 'zip') {
+    const zip = new JSZip();
+    zip.file(file.name, file);
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const url = URL.createObjectURL(blob);
+    results.push({
+      name: file.name + '.zip',
+      url,
+      size: blob.size
+    });
+    return;
+  }
 
   await ffmpeg.writeFile(inName, await fetchFile(file));
 
@@ -434,7 +449,7 @@ convert.onclick = async () => {
   convert.textContent = 'Converting…';
 
   try {
-    await loadEngine();
+    if (files.some(file => (file.output || defaultOutput(fileKind(file))) !== 'zip')) await loadEngine();
     for (let i = 0; i < files.length; i++) await convertOne(files[i], i, files.length);
     setProgress(100, 'Done — ' + results.length + ' file' + (results.length === 1 ? '' : 's'));
     renderDownloads();
