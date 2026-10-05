@@ -6,47 +6,32 @@ The project started as a macOS audio conversion Shortcut and has been rebuilt as
 
 ## What it converts
 
-### Audio
+The browser conversion engine is FFmpeg WebAssembly, so media support depends on the codecs compiled into that browser build.
 
-- MP3
-- M4A
-- AAC
-- WAV
-- FLAC
-- OGG
-- OPUS
+### Media
 
-### Video
+- Audio: MP3, M4A, AAC, WAV, FLAC, OGG, OPUS
+- Video: MP4, MOV, WEBM, MKV, AVI, GIF
+- Images: JPG, PNG, WEBP, BMP, TIFF
 
-- MP4
-- MOV
-- WEBM
-- MKV
-- AVI
-- GIF
+### Any other file
 
-### Images
+Any file type can still be selected and packaged into a ZIP directly in the browser. This is a universal file-handling fallback, not a claim that arbitrary document formats can be semantically converted into every other format.
 
-- JPG
-- PNG
-- WEBP
-
-Support ultimately depends on the codecs and formats included in the browser FFmpeg build.
+The interface only offers real conversion paths for formats the current browser engine can actually produce. It does not present fake document conversions.
 
 ## Conversion pathways
 
-The converter accounts for the media relationships explicitly rather than assuming every file can become every other file:
+Each queued file has its own output selector. Media conversions use FFmpeg WebAssembly; arbitrary files use the browser ZIP engine.
 
 | Source | Supported outputs |
 |---|---|
-| Audio | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI |
-| Video / GIF | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI, GIF, JPG, PNG, WEBP |
-| Image | JPG, PNG, WEBP, GIF, MP4, MOV, WEBM, MKV, AVI |
-| Other files | Not offered until a real media conversion path exists |
+| Audio | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI, ZIP |
+| Video / GIF | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI, GIF, JPG, PNG, WEBP, BMP, TIFF, ZIP |
+| Image | JPG, PNG, WEBP, BMP, TIFF, MP4, MOV, WEBM, MKV, AVI, GIF, ZIP |
+| Any other file | ZIP |
 
-Audio → video creates a simple black video canvas with the source audio. Image → video creates a short five-second video. Video → image extracts the first frame. Image → GIF creates a short animated GIF. Image ↔ audio is not presented as a conversion because it has no meaningful media representation.
-
-Each queued file has its own output selector, so mixed batches do not have to share one conversion path. The top-level output selector can apply a compatible format across the current batch.
+Audio → video creates a simple black video canvas with the source audio. Image → video creates a five-second video. Video → image extracts the first frame. Image → GIF creates a short animated GIF.
 
 ## Features
 
