@@ -14,6 +14,8 @@ const progressLabel = document.querySelector('#progressLabel');
 const progressValue = document.querySelector('#progressValue');
 const progressBar = document.querySelector('#progressBar');
 const downloads = document.querySelector('#downloads');
+const downloadList = document.querySelector('#downloadList');
+const downloadAll = document.querySelector('#downloadAll');
 const sourceTitle = document.querySelector('#dropTitle');
 const sourceHint = document.querySelector('#dropHint');
 
@@ -359,13 +361,26 @@ async function convertOne(file, index, total) {
 
 function renderDownloads() {
   downloads.hidden = !results.length;
-  downloads.innerHTML = results.map(r =>
+  downloadList.innerHTML = results.map(r =>
     '<a class="download" href="' + r.url + '" download="' + esc(r.name) + '">' +
       '<span><b>' + esc(r.name) + '</b><small>' + esc(size(r.size)) + '</small></span>' +
       '<strong>Download</strong>' +
     '</a>'
   ).join('');
 }
+
+downloadAll.onclick = () => {
+  results.forEach((result, index) => {
+    setTimeout(() => {
+      const link = document.createElement('a');
+      link.href = result.url;
+      link.download = result.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }, index * 150);
+  });
+};
 
 input.onchange = e => add(e.target.files);
 
