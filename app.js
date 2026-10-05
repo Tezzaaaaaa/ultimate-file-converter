@@ -207,7 +207,13 @@ async function loadEngine() {
 
 async function run(args, name) {
   ffmpegLog = [];
-  const code = await ffmpeg.exec(args);
+  // Never leave the UI waiting forever if an FFmpeg wasm job hangs.
+  // A conversion is allowed up to 15 minutes before the worker is restarted.
+  const code = await withTimeout(
+    ffmpeg.exec(args),
+    15 * 60 * 1000,
+    name + ': conversion timed out. The input or selected format could not be processed.'
+  );
   if (code !== 0) {
     const last = ffmpegLog[ffmpegLog.length - 1];
     throw new Error(name + ': conversion failed' + (last ? ' (' + last + ')' : ''));
@@ -227,7 +233,8 @@ function audioCodec(ext) {
 }
 
 function videoCodec(ext) {
-  if (ext === 'webm') return ['-c:v', 'libvpx-vp9', '-crf', '32', '-b:v', '0', '-c:a', 'libopus', '-b:a', '128k'];
+  // VP9 can hang in the single-threaded browser FFmpeg build. Use VP8 for reliable WebM conversion.
+  if (ext === 'webm') return ['-c:v', 'libvpx', '-crf', '32', '-b:v', '0', '-deadline', 'good', '-cpu-used', '5', '-c:a', 'libopus', '-b:a', '128k'];
   if (ext === 'avi') return ['-c:v', 'mpeg4', '-q:v', '4', '-c:a', 'mp3', '-b:a', '160k'];
   return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k'];
 }
@@ -343,6 +350,8 @@ async function convertOne(file, index, total) {
   const span = 90 / total;
   const message = 'Converting ' + file.name;
   setProgress(base, message);
+  // Install the progress listener before starting FFmpeg so the first
+  // progress event cannot be missed.
   onFileProgress = p => {
     if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
   };
