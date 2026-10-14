@@ -363,13 +363,13 @@ async function convertOne(file, index, total) {
         const frameName = framePattern.replace('%05d', String(frame).padStart(5, '0'));
         let data;
         try { data = await ffmpeg.readFile(frameName); } catch { break; }
-        zip.file(frameName.replace(/^frame-\\d+-/, ''), data);
+        zip.file(frameName.replace(/^frame-\d+-/, ''), data);
         frameCount++;
         await ffmpeg.deleteFile(frameName).catch(() => {});
       }
       if (!frameCount) throw new Error(file.name + ': no frames could be extracted.');
       const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 4 } });
-      results.push({ name: file.name.replace(/\\.[^.]+$/, '') + '-frames.zip', url: URL.createObjectURL(blob), size: blob.size });
+      results.push({ name: file.name.replace(/\.[^.]+$/, '') + '-frames.zip', url: URL.createObjectURL(blob), size: blob.size });
     } finally {
       onFileProgress = () => {};
       await ffmpeg.deleteFile(inName).catch(() => {});
