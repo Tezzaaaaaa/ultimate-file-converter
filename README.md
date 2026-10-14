@@ -6,32 +6,35 @@ The project started as a macOS audio conversion Shortcut and has been rebuilt as
 
 ## What it converts
 
-The browser conversion engine is FFmpeg WebAssembly, so media support depends on the codecs compiled into that browser build.
+Conversions run in the browser. Media conversion uses FFmpeg WebAssembly; spreadsheet conversion uses SheetJS; document and presentation text extraction uses the browser ZIP/XML APIs.
 
 ### Media
 
 - Audio: MP3, M4A, AAC, WAV, FLAC, OGG, OPUS
 - Video: MP4, MOV, WEBM, MKV, AVI, GIF
 - Images: JPG, PNG, WEBP, BMP, TIFF
+- Video frame extraction: JPG frames packaged into ZIP
 
-### Any other file
+### Documents
 
-Any file type can still be selected and packaged into a ZIP directly in the browser. This is a universal file-handling fallback, not a claim that arbitrary document formats can be semantically converted into every other format.
+- Inputs: TXT, Markdown, HTML, DOCX, ODT, RTF
+- Outputs: TXT, Markdown, HTML, DOCX, ODT, RTF
+- Text-based conversion is supported. DOCX/ODT layout, styles, tracked changes, images, tables, and embedded objects are not guaranteed to survive conversion.
 
-The interface only offers real conversion paths for formats the current browser engine can actually produce. It does not present fake document conversions.
+### Spreadsheets
 
-## Conversion pathways
+- Inputs and outputs: XLSX, XLS, CSV, ODS
+- SheetJS handles workbook reading and writing. CSV is a single-sheet format, so exporting a multi-sheet workbook to CSV exports the active/first sheet only; workbook-specific formatting and some advanced features may be lost.
 
-Each queued file has its own output selector. Media conversions use FFmpeg WebAssembly; arbitrary files use the browser ZIP engine.
+### Presentations
 
-| Source | Supported outputs |
-|---|---|
-| Audio | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI, ZIP |
-| Video / GIF | MP3, M4A, AAC, WAV, FLAC, OGG, OPUS, MP4, MOV, WEBM, MKV, AVI, GIF, JPG, PNG, WEBP, BMP, TIFF, ZIP |
-| Image | JPG, PNG, WEBP, BMP, TIFF, MP4, MOV, WEBM, MKV, AVI, GIF, ZIP |
-| Any other file | ZIP |
+- Inputs: PPTX and ODP
+- Outputs: PPTX, TXT, HTML
+- PPTX/ODP text can be extracted to TXT or HTML. PPTX output rebuilds a basic text-slide deck from extracted content; original themes, slide layouts, animations, media, and transitions are not preserved.
 
-Audio → video creates a simple black video canvas with the source audio. Image → video creates a five-second video. Video → image extracts the first frame. Image → GIF creates a short animated GIF.
+### Not supported as semantic conversions
+
+Legacy binary DOC/PPT, PDF conversion, and conversion between arbitrary unrelated file categories are not implemented. Any file can still be packaged into ZIP, which is packaging rather than format conversion.
 
 ## Features
 
