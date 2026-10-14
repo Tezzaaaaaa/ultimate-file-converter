@@ -42,7 +42,7 @@ const formats = {
 const groups = {
   Audio: ['MP3', 'M4A', 'AAC', 'WAV', 'FLAC', 'OGG', 'OPUS'],
   Video: ['MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'GIF'],
-  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF', 'PDF'],
+  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF'],
   Document: ['TXT', 'MD', 'HTML', 'DOCX', 'ODT', 'RTF', 'PDF'],
   Spreadsheet: ['XLSX', 'XLS', 'CSV', 'ODS', 'PDF'],
   Presentation: ['PPTX', 'PDF'],
@@ -77,7 +77,7 @@ function fileKind(file) {
 const allowed = {
   Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'ZIP'],
   Video: [...groups.Audio, ...groups.Video, ...groups.Image, 'FRAMES', 'ZIP'],
-  Image: [...groups.Image, ...groups.Video, 'ZIP'],
+  Image: [...groups.Image, 'PDF', ...groups.Video, 'ZIP'],
   Document: [...groups.Document, 'ZIP'],
   Spreadsheet: [...groups.Spreadsheet, 'ZIP'],
   Presentation: [...groups.Presentation, 'TXT', 'HTML', 'ZIP'],
