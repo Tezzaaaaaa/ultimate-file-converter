@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
   <title id="title">Convert</title>
   <rect width="128" height="128" rx="28" fill="#F6F6F3"/>
-  <path fill="#111111" d="M96 31 83 44C74 35 66 32 56 32 38 32 27 45 27 64s11 32 29 32c11 0 20-5 28-14l13 13c-11 13-25 20-42 20C28 115 8 94 8 64S29 13 56 13c17 0 30 6 40 18z" transform="translate(3 0) scale(.92)"/>
+  <path fill="#111111" d="M96 31 83 44C74 35 66 32 56 32 38 32 27 45 27 64s11 32 29 32c11 0 20-5 28-14l13 13c-11 13-25 20-42 20C28 115 8 94 8 64S29 13 56 13c17 0 30 6 40 18z" transform="translate(8 0) scale(1.02)"/>
   <path fill="#3070D0" d="M64 46 91 64 64 82Z"/>
 </svg>
