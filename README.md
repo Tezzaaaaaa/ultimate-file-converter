@@ -12,29 +12,33 @@ Conversions run in the browser. Media conversion uses FFmpeg WebAssembly; spread
 
 - Audio: MP3, M4A, AAC, WAV, FLAC, OGG, OPUS
 - Video: MP4, MOV, WEBM, MKV, AVI, GIF
-- Images: JPG, PNG, WEBP, BMP, TIFF
+- Images: JPG, PNG, WEBP, BMP, TIFF; SVG may be accepted as an input when the browser can decode it
+- Image to PDF: rasterizes a single supported image into a one-page PDF
 - Video frame extraction: JPG frames packaged into ZIP
 
 ### Documents
 
 - Inputs: TXT, Markdown, HTML, DOCX, ODT, RTF
-- Outputs: TXT, Markdown, HTML, DOCX, ODT, RTF
+- Outputs: TXT, Markdown, HTML, DOCX, ODT, RTF, PDF
+- Text-based PDF input: extracts selectable text to supported document outputs; scanned/image-only PDFs are not OCR-processed
 - Text-based conversion is supported. DOCX/ODT layout, styles, tracked changes, images, tables, and embedded objects are not guaranteed to survive conversion.
 
 ### Spreadsheets
 
 - Inputs and outputs: XLSX, XLS, CSV, ODS
+- Spreadsheet to PDF: exports sheet names and cell data as a readable text-based PDF; it does not reproduce spreadsheet page layout
 - SheetJS handles workbook reading and writing. CSV is a single-sheet format, so exporting a multi-sheet workbook to CSV exports the active/first sheet only; workbook-specific formatting and some advanced features may be lost.
 
 ### Presentations
 
 - Inputs: PPTX and ODP
-- Outputs: PPTX, TXT, HTML
+- Outputs: PPTX, TXT, HTML, PDF
+- Presentation to PDF: exports extracted slide text to a basic text PDF, not a faithful slide rendering
 - PPTX/ODP text can be extracted to TXT or HTML. PPTX output rebuilds a basic text-slide deck from extracted content; original themes, slide layouts, animations, media, and transitions are not preserved.
 
 ### Not supported as semantic conversions
 
-Legacy binary DOC/PPT, PDF conversion, and conversion between arbitrary unrelated file categories are not implemented. Any file can still be packaged into ZIP, which is packaging rather than format conversion.
+Legacy binary DOC/PPT conversion, scanned-PDF OCR, multi-page PDF-to-image export, and high-fidelity Office-to-PDF rendering are not implemented. PDF output is a basic text export for documents, spreadsheets and presentations, or a single-page image PDF. PDF extraction works only when the PDF contains selectable text. Any file can still be packaged into ZIP, which is packaging rather than format conversion.
 
 ## Features
 
@@ -77,4 +81,4 @@ FFmpeg and ffmpeg.wasm are independent open-source projects. Their respective li
 
 ## Status
 
-This is now the **Convert. Ultimate Converter** foundation: a universal media workflow rather than an audio-only converter. The architecture can be extended later with document, archive and specialist-format handlers without replacing the core interface.
+This is now the **Convert. Ultimate Converter** foundation: a universal media workflow rather than an audio-only converter. The architecture supports media conversion, text-oriented Office conversion, basic PDF creation/extraction, and ZIP packaging without replacing the core interface.
