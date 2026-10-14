@@ -396,7 +396,7 @@ async function convertOffice(file, kind, ext) {
       zip.file('mimetype','application/vnd.oasis.opendocument.text',{compression:'STORE'});
       const paras=text.split(/\r?\n/).map(line=>'<text:p>'+esc(line)+'</text:p>').join('');
       zip.file('content.xml','<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2"><office:body><office:text>'+paras+'</office:text></office:body></office:document-content>');
-      zip.file('META-INF/manifest.xml','<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/></manifest:manifest>');
+      zip.file('META-INF/manifest.xml','<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/></manifest:manifest>');
       blob=await zip.generateAsync({type:'blob'});
     } else throw new Error(file.name+': this output pathway is not supported.');
   }
