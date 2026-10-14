@@ -2,6 +2,7 @@
 
 :root{color-scheme:dark;--bg:#171a22;--surface:#1e222c;--raised:#232834;--text:#eaeefc;--muted:#a7b0c8;--subtle:#6b7490;--line:rgba(255,255,255,.07);--accent:#7c6cff;--cyan:#22d3ee;--radius:14px;--large-radius:28px;--content:1080px;--body-font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--display-font:"Space Grotesk","Inter",system-ui,sans-serif;--ease:cubic-bezier(.22,.61,.36,1);--shadow:10px 10px 26px #10121a,-10px -10px 26px #262b38;--shadow-small:6px 6px 14px #10121a,-6px -6px 14px #262b38;--inset:inset 6px 6px 14px #10121a,inset -6px -6px 14px #262b38}
 *{box-sizing:border-box}
+[hidden]{display:none}
 html{min-height:100%;background:var(--bg);color:var(--text);font:16px/1.5 var(--body-font);-webkit-font-smoothing:antialiased}
 body{position:relative;display:flex;flex-direction:column;min-height:100vh;margin:0;overflow-x:hidden;background:var(--bg);color:var(--text)}
 body::before,body::after{position:fixed;z-index:0;pointer-events:none;content:"";border-radius:50%;filter:blur(140px)}
