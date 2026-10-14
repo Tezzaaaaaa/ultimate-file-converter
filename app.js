@@ -35,24 +35,24 @@ let results = [];
 const formats = {
   MP3: 'mp3', M4A: 'm4a', AAC: 'aac', WAV: 'wav', FLAC: 'flac', OGG: 'ogg', OPUS: 'opus',
   MP4: 'mp4', MOV: 'mov', WEBM: 'webm', MKV: 'mkv', AVI: 'avi', GIF: 'gif',
-  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', FRAMES: 'frames', ZIP: 'zip',
+  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', PDF: 'pdf', FRAMES: 'frames', ZIP: 'zip',
   TXT: 'txt', MD: 'md', HTML: 'html', DOCX: 'docx', ODT: 'odt', RTF: 'rtf', XLSX: 'xlsx', XLS: 'xls', CSV: 'csv', ODS: 'ods', PPTX: 'pptx'
 };
 
 const groups = {
   Audio: ['MP3', 'M4A', 'AAC', 'WAV', 'FLAC', 'OGG', 'OPUS'],
   Video: ['MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'GIF'],
-  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF'],
-  Document: ['TXT', 'MD', 'HTML', 'DOCX', 'ODT', 'RTF'],
-  Spreadsheet: ['XLSX', 'XLS', 'CSV', 'ODS'],
-  Presentation: ['PPTX'],
+  Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF', 'PDF'],
+  Document: ['TXT', 'MD', 'HTML', 'DOCX', 'ODT', 'RTF', 'PDF'],
+  Spreadsheet: ['XLSX', 'XLS', 'CSV', 'ODS', 'PDF'],
+  Presentation: ['PPTX', 'PDF'],
   Archive: ['ZIP']
 };
 
 const imageExt = /\.(jpg|jpeg|png|webp|bmp|tif|tiff)$/i;
 const videoExt = /\.(mp4|mov|m4v|webm|mkv|avi|wmv|flv|mpeg|mpg|3gp)$/i;
 const audioExt = /\.(mp3|wav|m4a|aac|flac|ogg|opus|wma|aiff|aif)$/i;
-const documentExt = /\.(txt|md|html?|docx|odt|rtf)$/i;
+const documentExt = /\.(txt|md|html?|docx|odt|rtf|pdf)$/i;
 const spreadsheetExt = /\.(xlsx|xls|csv|ods)$/i;
 const presentationExt = /\.(pptx|odp)$/i;
 
@@ -66,7 +66,7 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
 
 function fileKind(file) {
   if (file.type.startsWith('video/') || videoExt.test(file.name) || /\.gif$/i.test(file.name)) return 'Video';
-  if (file.type.startsWith('image/') || imageExt.test(file.name)) return 'Image';
+  if (file.type.startsWith('image/') || imageExt.test(file.name) || /\.svg$/i.test(file.name)) return 'Image';
   if (file.type.startsWith('audio/') || audioExt.test(file.name)) return 'Audio';
   if (spreadsheetExt.test(file.name)) return 'Spreadsheet';
   if (presentationExt.test(file.name)) return 'Presentation';
@@ -90,7 +90,7 @@ function canConvert(kind, label, fileName = '') {
   if (/\.gif$/i.test(fileName) && kind === 'Video' && groups.Audio.includes(label)) return false;
   if (kind === 'Document' && groups.Document.includes(label)) return true;
   if (kind === 'Spreadsheet' && groups.Spreadsheet.includes(label)) return true;
-  if (kind === 'Presentation' && ['PPTX', 'TXT', 'HTML'].includes(label)) return true;
+  if (kind === 'Presentation' && ['PPTX', 'PDF', 'TXT', 'HTML'].includes(label)) return true;
   if (['Document', 'Spreadsheet', 'Presentation'].includes(kind) && label === 'ZIP') return true;
   return allowed[kind]?.includes(label) === true;
 }
@@ -343,9 +343,14 @@ async function convertOffice(file, kind, ext) {
   if (kind === 'Spreadsheet') {
     const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
     const workbook = XLSX.read(await file.arrayBuffer(), {type:'array', cellDates:true});
-    const data = XLSX.write(workbook, {bookType:ext, type:ext === 'csv' ? 'string' : 'array'});
-    const mime = {csv:'text/csv;charset=utf-8', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls:'application/vnd.ms-excel', ods:'application/vnd.oasis.opendocument.spreadsheet'}[ext];
-    blob = new Blob([data], {type:mime});
+    if (ext === 'pdf') {
+      const sheetText = workbook.SheetNames.map(name => 'Sheet: ' + name + '\n' + XLSX.utils.sheet_to_csv(workbook.Sheets[name])).join('\n\n');
+      blob = await textToPdf(sheetText);
+    } else {
+      const data = XLSX.write(workbook, {bookType:ext, type:ext === 'csv' ? 'string' : 'array'});
+      const mime = {csv:'text/csv;charset=utf-8', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls:'application/vnd.ms-excel', ods:'application/vnd.oasis.opendocument.spreadsheet'}[ext];
+      blob = new Blob([data], {type:mime});
+    }
   } else {
     let text = '';
     if (['txt','md'].includes(sourceExt)) text = await file.text();
@@ -355,6 +360,17 @@ async function convertOffice(file, kind, ext) {
       text = (doc.body?.innerText || doc.body?.textContent || '').trim();
     } else if (sourceExt === 'rtf') {
       text = (await file.text()).replace(/\\par[d]?/gi,'\n').replace(/\\'[0-9a-f]{2}/gi,' ').replace(/\\[a-z]+-?\d* ?/gi,'').replace(/[{}]/g,'').trim();
+    } else if (sourceExt === 'pdf') {
+      const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs/+esm');
+      const pdf = await pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false}).promise;
+      const pages = [];
+      for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+        const page = await pdf.getPage(pageNo);
+        const content = await page.getTextContent();
+        pages.push(content.items.map(item => item.str || '').join(' '));
+      }
+      text = pages.join('\n\n').trim();
+      if (!text) throw new Error(file.name + ': this PDF has no selectable text. Scanned PDFs require OCR, which is not available in this converter yet.');
     } else {
       const zip = await JSZip.loadAsync(file);
       let xml = '';
@@ -390,7 +406,8 @@ async function convertOffice(file, kind, ext) {
       zip.file('word/document.xml','<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+paragraphs+'<w:sectPr/></w:body></w:document>');
       blob=await zip.generateAsync({type:'blob'});
     } else if (ext === 'rtf') {
-      blob=new Blob(['{\\rtf1\\ansi\\deff0\n'+text.replace(/[\\{}]/g,'\\function mimeFor(ext) {').replace(/\r?\n/g,'\\par\n')+'}'],{type:'application/rtf'});
+      const escaped = text.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/\r?\n/g, '\\par\n');
+      blob = new Blob(['{\\rtf1\\ansi\\deff0\n' + escaped + '}'], {type:'application/rtf'});
     } else if (ext === 'odt') {
       const zip=new JSZip();
       zip.file('mimetype','application/vnd.oasis.opendocument.text',{compression:'STORE'});
@@ -400,6 +417,7 @@ async function convertOffice(file, kind, ext) {
       blob=await zip.generateAsync({type:'blob'});
     } else throw new Error(file.name+': this output pathway is not supported.');
   }
+  if (ext === 'pdf' && kind !== 'Spreadsheet') blob = await textToPdf(text);
   outputName=file.name.replace(/\.[^.]+$/,'')+'.'+ext;
   results.push({name:outputName,url:URL.createObjectURL(blob),size:blob.size});
 }
@@ -410,7 +428,7 @@ function mimeFor(ext) {
     flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/opus',
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
     mkv: 'video/x-matroska', avi: 'video/x-msvideo', gif: 'image/gif',
-    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff', zip: 'application/zip',
+    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff', pdf:'application/pdf', zip: 'application/zip',
     txt:'text/plain', md:'text/markdown', html:'text/html', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt:'application/vnd.oasis.opendocument.text', rtf:'application/rtf', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls:'application/vnd.ms-excel', csv:'text/csv', ods:'application/vnd.oasis.opendocument.spreadsheet', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
   }[ext] || 'application/octet-stream';
 }
@@ -422,6 +440,12 @@ async function convertOne(file, index, total) {
   const label = Object.keys(formats).find(k => formats[k] === ext);
   if (!canConvert(kind, label, file.name)) {
     throw new Error(file.name + ': cannot convert to ' + ext.toUpperCase());
+  }
+
+  if (kind === 'Image' && ext === 'pdf') {
+    const blob = await imageToPdf(file);
+    results.push({name:file.name.replace(/\.[^.]+$/,'')+'.pdf',url:URL.createObjectURL(blob),size:blob.size});
+    return;
   }
 
   if (['Document','Spreadsheet','Presentation'].includes(kind) && ext !== 'zip') {
@@ -582,7 +606,7 @@ convert.onclick = async () => {
   convert.textContent = 'Converting…';
 
   try {
-    if (files.some(file => !['zip','txt','md','html','docx','odt','rtf','xlsx','xls','csv','ods','pptx'].includes(file.output || defaultOutput(fileKind(file))))) await loadEngine();
+    if (files.some(file => !['zip','txt','md','html','docx','odt','rtf','xlsx','xls','csv','ods','pptx','pdf'].includes(file.output || defaultOutput(fileKind(file))))) await loadEngine();
     for (let i = 0; i < files.length; i++) await convertOne(files[i], i, files.length);
     setProgress(100, 'Done — ' + results.length + ' file' + (results.length === 1 ? '' : 's'));
     renderDownloads();
