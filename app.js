@@ -7,7 +7,6 @@ const drop = document.querySelector('#drop');
 const queue = document.querySelector('#queue');
 const items = document.querySelector('#items');
 const clear = document.querySelector('#clear');
-const appearance = document.querySelector('#appearance');
 const convert = document.querySelector('#convert');
 const progress = document.querySelector('#progress');
 const progressLabel = document.querySelector('#progressLabel');
@@ -432,15 +431,6 @@ clear.onclick = () => {
   updateSourceCopy();
   progress.hidden = true;
 };
-
-appearance.onclick = () => {
-  document.body.classList.toggle('dark');
-  localStorage.setItem('dark', document.body.classList.contains('dark'));
-};
-
-if (localStorage.getItem('dark') === 'true') {
-  document.body.classList.add('dark');
-}
 
 convert.onclick = async () => {
   if (!files.length || converting) return;
