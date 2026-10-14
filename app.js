@@ -35,19 +35,26 @@ let results = [];
 const formats = {
   MP3: 'mp3', M4A: 'm4a', AAC: 'aac', WAV: 'wav', FLAC: 'flac', OGG: 'ogg', OPUS: 'opus',
   MP4: 'mp4', MOV: 'mov', WEBM: 'webm', MKV: 'mkv', AVI: 'avi', GIF: 'gif',
-  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', FRAMES: 'frames', ZIP: 'zip'
+  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', FRAMES: 'frames', ZIP: 'zip',
+  TXT: 'txt', MD: 'md', HTML: 'html', DOCX: 'docx', ODT: 'odt', RTF: 'rtf', XLSX: 'xlsx', XLS: 'xls', CSV: 'csv', ODS: 'ods', PPTX: 'pptx'
 };
 
 const groups = {
   Audio: ['MP3', 'M4A', 'AAC', 'WAV', 'FLAC', 'OGG', 'OPUS'],
   Video: ['MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'GIF'],
   Image: ['JPG', 'PNG', 'WEBP', 'BMP', 'TIFF'],
+  Document: ['TXT', 'MD', 'HTML', 'DOCX', 'ODT', 'RTF'],
+  Spreadsheet: ['XLSX', 'XLS', 'CSV', 'ODS'],
+  Presentation: ['PPTX'],
   Archive: ['ZIP']
 };
 
 const imageExt = /\.(jpg|jpeg|png|webp|bmp|tif|tiff)$/i;
 const videoExt = /\.(mp4|mov|m4v|webm|mkv|avi|wmv|flv|mpeg|mpg|3gp)$/i;
 const audioExt = /\.(mp3|wav|m4a|aac|flac|ogg|opus|wma|aiff|aif)$/i;
+const documentExt = /\.(txt|md|html?|docx|odt|rtf)$/i;
+const spreadsheetExt = /\.(xlsx|xls|csv|ods)$/i;
+const presentationExt = /\.(pptx|odp)$/i;
 
 const size = n => n < 1024 * 1024
   ? (n / 1024).toFixed(1) + ' KB'
@@ -61,6 +68,9 @@ function fileKind(file) {
   if (file.type.startsWith('video/') || videoExt.test(file.name) || /\.gif$/i.test(file.name)) return 'Video';
   if (file.type.startsWith('image/') || imageExt.test(file.name)) return 'Image';
   if (file.type.startsWith('audio/') || audioExt.test(file.name)) return 'Audio';
+  if (spreadsheetExt.test(file.name)) return 'Spreadsheet';
+  if (presentationExt.test(file.name)) return 'Presentation';
+  if (documentExt.test(file.name)) return 'Document';
   return 'File';
 }
 
@@ -68,6 +78,9 @@ const allowed = {
   Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'ZIP'],
   Video: [...groups.Audio, ...groups.Video, ...groups.Image, 'FRAMES', 'ZIP'],
   Image: [...groups.Image, ...groups.Video, 'ZIP'],
+  Document: [...groups.Document, 'ZIP'],
+  Spreadsheet: [...groups.Spreadsheet, 'ZIP'],
+  Presentation: [...groups.Presentation, 'TXT', 'HTML', 'ZIP'],
   File: ['ZIP']
 };
 
@@ -75,6 +88,10 @@ function canConvert(kind, label, fileName = '') {
   if (label === 'FRAMES') return kind === 'Video';
   if (kind === 'Audio' && label === 'GIF') return false;
   if (/\.gif$/i.test(fileName) && kind === 'Video' && groups.Audio.includes(label)) return false;
+  if (kind === 'Document' && groups.Document.includes(label)) return true;
+  if (kind === 'Spreadsheet' && groups.Spreadsheet.includes(label)) return true;
+  if (kind === 'Presentation' && ['PPTX', 'TXT', 'HTML'].includes(label)) return true;
+  if (['Document', 'Spreadsheet', 'Presentation'].includes(kind) && label === 'ZIP') return true;
   return allowed[kind]?.includes(label) === true;
 }
 
@@ -82,6 +99,9 @@ function defaultOutput(kind) {
   if (kind === 'Audio') return 'mp3';
   if (kind === 'Video') return 'mp4';
   if (kind === 'Image') return 'png';
+  if (kind === 'Document') return 'txt';
+  if (kind === 'Spreadsheet') return 'xlsx';
+  if (kind === 'Presentation') return 'pptx';
   return 'zip';
 }
 
@@ -316,13 +336,82 @@ function commandFor(sourceKind, ext, inputName, outputName) {
   throw new Error('Unsupported conversion path');
 }
 
+
+async function convertOffice(file, kind, ext) {
+  const sourceExt = file.name.split('.').pop().toLowerCase();
+  let blob, outputName;
+  if (kind === 'Spreadsheet') {
+    const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
+    const workbook = XLSX.read(await file.arrayBuffer(), {type:'array', cellDates:true});
+    const data = XLSX.write(workbook, {bookType:ext, type:ext === 'csv' ? 'string' : 'array'});
+    const mime = {csv:'text/csv;charset=utf-8', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls:'application/vnd.ms-excel', ods:'application/vnd.oasis.opendocument.spreadsheet'}[ext];
+    blob = new Blob([data], {type:mime});
+  } else {
+    let text = '';
+    if (['txt','md'].includes(sourceExt)) text = await file.text();
+    else if (['html','htm'].includes(sourceExt)) {
+      const doc = new DOMParser().parseFromString(await file.text(),'text/html');
+      doc.querySelectorAll('script,style,head').forEach(n=>n.remove());
+      text = (doc.body?.innerText || doc.body?.textContent || '').trim();
+    } else if (sourceExt === 'rtf') {
+      text = (await file.text()).replace(/\\par[d]?/gi,'\n').replace(/\\'[0-9a-f]{2}/gi,' ').replace(/\\[a-z]+-?\d* ?/gi,'').replace(/[{}]/g,'').trim();
+    } else {
+      const zip = await JSZip.loadAsync(file);
+      let xml = '';
+      if (sourceExt === 'docx') xml = await zip.file('word/document.xml')?.async('text') || '';
+      else if (sourceExt === 'odt') xml = await zip.file('content.xml')?.async('text') || '';
+      else if (sourceExt === 'pptx') {
+        const paths = Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((x,y)=>x.localeCompare(y,undefined,{numeric:true}));
+        xml = (await Promise.all(paths.map(n=>zip.file(n).async('text')))).join('\n');
+      } else if (sourceExt === 'odp') xml = await zip.file('content.xml')?.async('text') || '';
+      if (!xml) throw new Error(file.name + ': readable document content was not found.');
+      const parsed = new DOMParser().parseFromString(xml,'application/xml');
+      text = [...parsed.getElementsByTagName('*')].filter(n=>['t','p','h'].includes(n.localName)).map(n=>n.localName==='t'?n.textContent:'\n').join('').replace(/\n{3,}/g,'\n\n').trim();
+    }
+    if (kind === 'Presentation' && ext === 'pptx') {
+      const PptxGenJS = (await import('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/+esm')).default;
+      const pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
+      const chunks = text.split(/\n{2,}/).filter(Boolean);
+      for (const chunk of (chunks.length ? chunks : [text || ' '])) {
+        const slide=pptx.addSlide();
+        slide.addText(chunk,{x:.6,y:.6,w:12.1,h:6.2,fontFace:'Arial',fontSize:22,color:'222222',valign:'top'});
+      }
+      blob = await pptx.write({outputType:'blob'});
+    } else if (ext === 'txt' || ext === 'md') {
+      blob = new Blob([text],{type:ext==='md'?'text/markdown;charset=utf-8':'text/plain;charset=utf-8'});
+    } else if (ext === 'html') {
+      const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Converted file</title></head><body>'+text.split(/\r?\n/).map(line=>'<p>'+esc(line)+'</p>').join('')+'</body></html>';
+      blob = new Blob([html],{type:'text/html;charset=utf-8'});
+    } else if (ext === 'docx') {
+      const zip=new JSZip();
+      const paragraphs=text.split(/\r?\n/).map(line=>'<w:p><w:r><w:t xml:space="preserve">'+esc(line)+'</w:t></w:r></w:p>').join('');
+      zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+      zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+      zip.file('word/document.xml','<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+paragraphs+'<w:sectPr/></w:body></w:document>');
+      blob=await zip.generateAsync({type:'blob'});
+    } else if (ext === 'rtf') {
+      blob=new Blob(['{\\rtf1\\ansi\\deff0\n'+text.replace(/[\\{}]/g,'\\function mimeFor(ext) {').replace(/\r?\n/g,'\\par\n')+'}'],{type:'application/rtf'});
+    } else if (ext === 'odt') {
+      const zip=new JSZip();
+      zip.file('mimetype','application/vnd.oasis.opendocument.text',{compression:'STORE'});
+      const paras=text.split(/\r?\n/).map(line=>'<text:p>'+esc(line)+'</text:p>').join('');
+      zip.file('content.xml','<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2"><office:body><office:text>'+paras+'</office:text></office:body></office:document-content>');
+      zip.file('META-INF/manifest.xml','<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/></manifest:manifest>');
+      blob=await zip.generateAsync({type:'blob'});
+    } else throw new Error(file.name+': this output pathway is not supported.');
+  }
+  outputName=file.name.replace(/\.[^.]+$/,'')+'.'+ext;
+  results.push({name:outputName,url:URL.createObjectURL(blob),size:blob.size});
+}
+
 function mimeFor(ext) {
   return {
     mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav',
     flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/opus',
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
     mkv: 'video/x-matroska', avi: 'video/x-msvideo', gif: 'image/gif',
-    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff', zip: 'application/zip'
+    jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', bmp: 'image/bmp', tiff: 'image/tiff', zip: 'application/zip',
+    txt:'text/plain', md:'text/markdown', html:'text/html', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', odt:'application/vnd.oasis.opendocument.text', rtf:'application/rtf', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls:'application/vnd.ms-excel', csv:'text/csv', ods:'application/vnd.oasis.opendocument.spreadsheet', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
   }[ext] || 'application/octet-stream';
 }
 
@@ -333,6 +422,12 @@ async function convertOne(file, index, total) {
   const label = Object.keys(formats).find(k => formats[k] === ext);
   if (!canConvert(kind, label, file.name)) {
     throw new Error(file.name + ': cannot convert to ' + ext.toUpperCase());
+  }
+
+  if (['Document','Spreadsheet','Presentation'].includes(kind) && ext !== 'zip') {
+    setProgress(10 + (index / total) * 90, 'Converting ' + file.name);
+    await convertOffice(file, kind, ext);
+    return;
   }
 
   const inName = 'input-' + index + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -487,7 +582,7 @@ convert.onclick = async () => {
   convert.textContent = 'Converting…';
 
   try {
-    if (files.some(file => (file.output || defaultOutput(fileKind(file))) !== 'zip')) await loadEngine();
+    if (files.some(file => !['zip','txt','md','html','docx','odt','rtf','xlsx','xls','csv','ods','pptx'].includes(file.output || defaultOutput(fileKind(file))))) await loadEngine();
     for (let i = 0; i < files.length; i++) await convertOne(files[i], i, files.length);
     setProgress(100, 'Done — ' + results.length + ' file' + (results.length === 1 ? '' : 's'));
     renderDownloads();
