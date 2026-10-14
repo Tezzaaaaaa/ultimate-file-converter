@@ -172,6 +172,13 @@ function add(list) {
   const incoming = [...list];
   if (!incoming.length) return;
 
+  // A new selection starts a fresh visible conversion session.
+  results.forEach(result => URL.revokeObjectURL(result.url));
+  results = [];
+  renderDownloads();
+  progress.hidden = true;
+  convert.textContent = 'Convert files';
+
   incoming.forEach(file => {
     const kind = fileKind(file);
     files.push(Object.assign(file, { output: defaultOutput(kind) }));
