@@ -359,7 +359,7 @@ async function convertOne(file, index, total) {
       await run(['-y', '-i', inName, '-vf', 'fps=1/' + interval, '-q:v', '3', framePattern], file.name);
       const zip = new JSZip();
       let frameCount = 0;
-      for (let frame = 1; frame < 100000; frame++) {
+      for (let frame = 1; ; frame++) {
         const frameName = framePattern.replace('%05d', String(frame).padStart(5, '0'));
         let data;
         try { data = await ffmpeg.readFile(frameName); } catch { break; }
