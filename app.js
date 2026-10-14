@@ -383,7 +383,12 @@ async function convertOffice(file, kind, ext) {
       } else if (sourceExt === 'odp') xml = await zip.file('content.xml')?.async('text') || '';
       if (!xml) throw new Error(file.name + ': readable document content was not found.');
       const parsed = new DOMParser().parseFromString(xml,'application/xml');
-      text = [...parsed.getElementsByTagName('*')].filter(n=>['t','p','h'].includes(n.localName)).map(n=>n.localName==='t'?n.textContent:'\n').join('').replace(/\n{3,}/g,'\n\n').trim();
+      if (['odt','odp'].includes(sourceExt)) {
+        const textNamespace = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0';
+        text = [...parsed.getElementsByTagNameNS(textNamespace, '*')].filter(n => ['p','h'].includes(n.localName)).map(n => n.textContent.trim()).filter(Boolean).join('\n');
+      } else {
+        text = [...parsed.getElementsByTagName('*')].filter(n=>['t','p','h'].includes(n.localName)).map(n=>n.localName==='t'?n.textContent:'\n').join('').replace(/\n{3,}/g,'\n\n').trim();
+      }
     }
     if (kind === 'Presentation' && ext === 'pptx') {
       const PptxGenJS = (await import('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/+esm')).default;
