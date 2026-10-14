@@ -17,6 +17,8 @@ const downloadList = document.querySelector('#downloadList');
 const downloadAll = document.querySelector('#downloadAll');
 const sourceTitle = document.querySelector('#dropTitle');
 const sourceHint = document.querySelector('#dropHint');
+const frameOptions = document.querySelector('#frameOptions');
+const frameInterval = document.querySelector('#frameInterval');
 
 const CDN = 'https://cdn.jsdelivr.net/npm/';
 const CORE_BASE = CDN + '@ffmpeg/core@0.12.10/dist/esm/';
@@ -33,7 +35,7 @@ let results = [];
 const formats = {
   MP3: 'mp3', M4A: 'm4a', AAC: 'aac', WAV: 'wav', FLAC: 'flac', OGG: 'ogg', OPUS: 'opus',
   MP4: 'mp4', MOV: 'mov', WEBM: 'webm', MKV: 'mkv', AVI: 'avi', GIF: 'gif',
-  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', ZIP: 'zip'
+  JPG: 'jpg', PNG: 'png', WEBP: 'webp', BMP: 'bmp', TIFF: 'tiff', FRAMES: 'frames', ZIP: 'zip'
 };
 
 const groups = {
@@ -64,12 +66,13 @@ function fileKind(file) {
 
 const allowed = {
   Audio: [...groups.Audio, 'MP4', 'MOV', 'WEBM', 'MKV', 'AVI', 'ZIP'],
-  Video: [...groups.Audio, ...groups.Video, ...groups.Image, 'ZIP'],
+  Video: [...groups.Audio, ...groups.Video, ...groups.Image, 'FRAMES', 'ZIP'],
   Image: [...groups.Image, ...groups.Video, 'ZIP'],
   File: ['ZIP']
 };
 
 function canConvert(kind, label, fileName = '') {
+  if (label === 'FRAMES') return kind === 'Video';
   if (kind === 'Audio' && label === 'GIF') return false;
   if (/\.gif$/i.test(fileName) && kind === 'Video' && groups.Audio.includes(label)) return false;
   return allowed[kind]?.includes(label) === true;
@@ -115,6 +118,8 @@ function render() {
       '<button class="link remove" data-i="' + index + '"' + (converting ? ' disabled' : '') + '>Remove</button>' +
     '</div>';
   }).join('');
+
+  frameOptions.hidden = !files.some(file => file.output === 'frames');
 
   document.querySelectorAll('.select').forEach(select => {
     select.onchange = event => {
@@ -332,6 +337,45 @@ async function convertOne(file, index, total) {
 
   const inName = 'input-' + index + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
   const out = index + '-out.' + ext;
+
+  if (ext === 'frames') {
+    const interval = Number(frameInterval.value);
+    if (!Number.isFinite(interval) || interval < 0.1 || interval > 3600) {
+      throw new Error('Frame interval must be between 0.1 and 3600 seconds.');
+    }
+
+    const inName = 'input-' + index + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const framePattern = 'frame-' + index + '-%05d.jpg';
+    await ffmpeg.writeFile(inName, await fetchFile(file));
+    const base = 10 + (index / total) * 90;
+    const span = 90 / total;
+    const message = 'Extracting frames from ' + file.name;
+    setProgress(base, message);
+    onFileProgress = p => {
+      if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
+    };
+
+    try {
+      await run(['-y', '-i', inName, '-vf', 'fps=1/' + interval, '-q:v', '3', framePattern], file.name);
+      const zip = new JSZip();
+      let frameCount = 0;
+      for (let frame = 1; frame < 100000; frame++) {
+        const frameName = framePattern.replace('%05d', String(frame).padStart(5, '0'));
+        let data;
+        try { data = await ffmpeg.readFile(frameName); } catch { break; }
+        zip.file(frameName.replace(/^frame-\\d+-/, ''), data);
+        frameCount++;
+        await ffmpeg.deleteFile(frameName).catch(() => {});
+      }
+      if (!frameCount) throw new Error(file.name + ': no frames could be extracted.');
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 4 } });
+      results.push({ name: file.name.replace(/\\.[^.]+$/, '') + '-frames.zip', url: URL.createObjectURL(blob), size: blob.size });
+    } finally {
+      onFileProgress = () => {};
+      await ffmpeg.deleteFile(inName).catch(() => {});
+    }
+    return;
+  }
 
   if (ext === 'zip') {
     const zip = new JSZip();
