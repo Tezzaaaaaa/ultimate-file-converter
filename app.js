@@ -254,8 +254,8 @@ async function run(args, name) {
     // Large media files can take time, but the UI must not wait indefinitely.
     code = await withTimeout(
       ffmpeg.exec(args),
-      5 * 60 * 1000,
-      name + ': conversion timed out after 5 minutes. Try a smaller file or a different output format.'
+      15 * 60 * 1000,
+      name + ': conversion timed out after 15 minutes. Try a smaller file or a different output format.'
     );
   } catch (error) {
     // A timed-out FFmpeg worker may still be busy. Reset it so Retry starts a fresh engine.
