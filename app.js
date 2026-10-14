@@ -213,19 +213,34 @@ async function loadEngine() {
     const workerURL = URL.createObjectURL(
       new Blob(['import ' + JSON.stringify(WORKER_URL) + ';'], { type: 'text/javascript' })
     );
-    const coreURL = await toBlobURL(CORE_BASE + 'ffmpeg-core.js', 'text/javascript');
-    const wasmURL = await toBlobURL(CORE_BASE + 'ffmpeg-core.wasm', 'application/wasm');
+    try {
+      setProgress(5, 'Downloading FFmpeg core…');
+      const coreURL = await withTimeout(
+        toBlobURL(CORE_BASE + 'ffmpeg-core.js', 'text/javascript'),
+        60000,
+        'Timed out downloading the FFmpeg core. Check your connection and try again.'
+      );
+      setProgress(7, 'Downloading FFmpeg WebAssembly…');
+      const wasmURL = await withTimeout(
+        toBlobURL(CORE_BASE + 'ffmpeg-core.wasm', 'application/wasm'),
+        60000,
+        'Timed out downloading the FFmpeg WebAssembly engine. Check your connection and try again.'
+      );
 
-    setProgress(8, 'Starting conversion engine…');
-    // ffmpeg.load() never rejects when the worker fails to start, so it is wrapped in a timeout.
-    await withTimeout(
-      ffmpeg.load({ classWorkerURL: workerURL, coreURL, wasmURL }),
-      60000,
-      'Conversion engine failed to start. Open the browser console for details.'
-    );
+      setProgress(8, 'Starting conversion engine…');
+      // ffmpeg.load() may hang when its worker fails to start, so it is wrapped in a timeout.
+      await withTimeout(
+        ffmpeg.load({ classWorkerURL: workerURL, coreURL, wasmURL }),
+        60000,
+        'Conversion engine failed to start. Check that your browser allows workers and try again.'
+      );
+    } finally {
+      URL.revokeObjectURL(workerURL);
+    }
   } catch (error) {
-    try { ffmpeg.terminate(); } catch {}
+    try { ffmpeg?.terminate(); } catch {}
     ffmpeg = null;
+    loaded = false;
     throw error;
   }
 
@@ -234,13 +249,21 @@ async function loadEngine() {
 
 async function run(args, name) {
   ffmpegLog = [];
-  // Never leave the UI waiting forever if an FFmpeg wasm job hangs.
-  // A conversion is allowed up to 15 minutes before the worker is restarted.
-  const code = await withTimeout(
-    ffmpeg.exec(args),
-    15 * 60 * 1000,
-    name + ': conversion timed out. The input or selected format could not be processed.'
-  );
+  let code;
+  try {
+    // Large media files can take time, but the UI must not wait indefinitely.
+    code = await withTimeout(
+      ffmpeg.exec(args),
+      5 * 60 * 1000,
+      name + ': conversion timed out after 5 minutes. Try a smaller file or a different output format.'
+    );
+  } catch (error) {
+    // A timed-out FFmpeg worker may still be busy. Reset it so Retry starts a fresh engine.
+    try { ffmpeg?.terminate(); } catch {}
+    ffmpeg = null;
+    loaded = false;
+    throw error;
+  }
   if (code !== 0) {
     const last = ffmpegLog[ffmpegLog.length - 1];
     throw new Error(name + ': conversion failed' + (last ? ' (' + last + ')' : ''));
@@ -337,14 +360,22 @@ function commandFor(sourceKind, ext, inputName, outputName) {
 }
 
 
-async function convertOffice(file, kind, ext) {
+async function convertOffice(file, kind, ext, reportProgress = () => {}) {
   const sourceExt = file.name.split('.').pop().toLowerCase();
   let blob, outputName;
+  reportProgress(0.03, 'Loading document conversion tools');
   if (kind === 'Spreadsheet') {
-    const XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm');
+    const XLSX = await withTimeout(
+      import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm'),
+      60000,
+      'Timed out loading spreadsheet support. Check your connection and try again.'
+    );
+    reportProgress(0.2, 'Reading spreadsheet');
     const workbook = XLSX.read(await file.arrayBuffer(), {type:'array', cellDates:true});
+    reportProgress(0.55, 'Preparing spreadsheet output');
     if (ext === 'pdf') {
       const sheetText = workbook.SheetNames.map(name => 'Sheet: ' + name + '\n' + XLSX.utils.sheet_to_csv(workbook.Sheets[name])).join('\n\n');
+      reportProgress(0.7, 'Building PDF');
       blob = await textToPdf(sheetText);
     } else {
       const data = XLSX.write(workbook, {bookType:ext, type:ext === 'csv' ? 'string' : 'array'});
@@ -353,6 +384,7 @@ async function convertOffice(file, kind, ext) {
     }
   } else {
     let text = '';
+    reportProgress(0.12, 'Reading document content');
     if (['txt','md'].includes(sourceExt)) text = await file.text();
     else if (['html','htm'].includes(sourceExt)) {
       const doc = new DOMParser().parseFromString(await file.text(),'text/html');
@@ -366,14 +398,21 @@ async function convertOffice(file, kind, ext) {
       const pdf = await pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false}).promise;
       const pages = [];
       for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
+        reportProgress(0.15 + 0.5 * (pageNo - 1) / Math.max(1, pdf.numPages), 'Extracting PDF text (page ' + pageNo + ' of ' + pdf.numPages + ')');
         const page = await pdf.getPage(pageNo);
         const content = await page.getTextContent();
         pages.push(content.items.map(item => item.str || '').join(' '));
+        reportProgress(0.15 + 0.5 * pageNo / Math.max(1, pdf.numPages), 'Extracting PDF text (page ' + pageNo + ' of ' + pdf.numPages + ')');
       }
       text = pages.join('\n\n').trim();
       if (!text) throw new Error(file.name + ': this PDF has no selectable text. Scanned PDFs require OCR, which is not available in this converter yet.');
     } else {
-      const zip = await JSZip.loadAsync(file);
+      reportProgress(0.18, 'Opening Office document');
+      const zip = await withTimeout(
+        JSZip.loadAsync(file),
+        60000,
+        'Timed out opening this Office document. The file may be damaged or too large.'
+      );
       let xml = '';
       if (sourceExt === 'docx') xml = await zip.file('word/document.xml')?.async('text') || '';
       else if (sourceExt === 'odt') xml = await zip.file('content.xml')?.async('text') || '';
@@ -382,6 +421,7 @@ async function convertOffice(file, kind, ext) {
         xml = (await Promise.all(paths.map(n=>zip.file(n).async('text')))).join('\n');
       } else if (sourceExt === 'odp') xml = await zip.file('content.xml')?.async('text') || '';
       if (!xml) throw new Error(file.name + ': readable document content was not found.');
+      reportProgress(0.62, 'Extracting document text');
       const parsed = new DOMParser().parseFromString(xml,'application/xml');
       if (['odt','odp'].includes(sourceExt)) {
         const textNamespace = 'urn:oasis:names:tc:opendocument:xmlns:text:1.0';
@@ -390,8 +430,13 @@ async function convertOffice(file, kind, ext) {
         text = [...parsed.getElementsByTagName('*')].filter(n=>['t','p','h'].includes(n.localName)).map(n=>n.localName==='t'?n.textContent:'\n').join('').replace(/\n{3,}/g,'\n\n').trim();
       }
     }
+    reportProgress(0.78, 'Preparing converted file');
     if (kind === 'Presentation' && ext === 'pptx') {
-      const PptxGenJS = (await import('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/+esm')).default;
+      const PptxGenJS = (await withTimeout(
+        import('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/+esm'),
+        60000,
+        'Timed out loading presentation support. Check your connection and try again.'
+      )).default;
       const pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
       const chunks = text.split(/\n{2,}/).filter(Boolean);
       for (const chunk of (chunks.length ? chunks : [text || ' '])) {
@@ -423,7 +468,11 @@ async function convertOffice(file, kind, ext) {
       blob=await zip.generateAsync({type:'blob'});
     } else throw new Error(file.name+': this output pathway is not supported.');
   }
-  if (ext === 'pdf' && kind !== 'Spreadsheet') blob = await textToPdf(text);
+  if (ext === 'pdf' && kind !== 'Spreadsheet') {
+    reportProgress(0.88, 'Building PDF');
+    blob = await textToPdf(text);
+  }
+  reportProgress(0.96, 'Finishing converted file');
   outputName=file.name.replace(/\.[^.]+$/,'')+'.'+ext;
   results.push({name:outputName,url:URL.createObjectURL(blob),size:blob.size});
 }
@@ -497,8 +546,19 @@ async function convertOne(file, index, total) {
   }
 
   if (['Document','Spreadsheet','Presentation'].includes(kind) && ext !== 'zip') {
-    setProgress(10 + (index / total) * 90, 'Converting ' + file.name);
-    await convertOffice(file, kind, ext);
+    const base = 10 + (index / total) * 90;
+    const span = 90 / total;
+    const reportProgress = (fraction, stage) => {
+      const value = base + span * Math.max(0, Math.min(1, fraction));
+      setProgress(value, stage + ': ' + file.name);
+    };
+    reportProgress(0, 'Preparing conversion');
+    await withTimeout(
+      convertOffice(file, kind, ext, reportProgress),
+      5 * 60 * 1000,
+      file.name + ': conversion timed out after 5 minutes. Try a smaller file or another output format.'
+    );
+    reportProgress(1, 'Finished converting');
     return;
   }
 
