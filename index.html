@@ -11,16 +11,13 @@
 <body>
 <header>
   <a class="brand" href="#">convert<span>.</span></a>
-  <button id="appearance" class="toggle" aria-label="Toggle appearance">
-    <span class="sun">◐</span><span class="moon">◑</span>
-  </button>
 </header>
 
 <main>
   <section class="hero">
     <div class="eyebrow">Universal file converter</div>
     <h1>Convert your files.</h1>
-    <p>Choose your files, select an output format, and convert them in your browser.</p>
+    <p>Add your files, choose an output format for each, and convert them in your browser.</p>
   </section>
 
   <section class="panel">
@@ -38,35 +35,6 @@
       <span class="drop-hint" id="dropHint">Click or drag and drop</span>
     </label>
 
-    <div class="format-card">
-      <div class="section-heading compact">
-        <div>
-          <h2>Choose output</h2>
-          <p>Select the format to use for your files. Individual formats can be changed below.</p>
-        </div>
-      </div>
-
-      <div class="row">
-        <label class="select-wrap">
-          <span>Convert to</span>
-          <select id="format">
-            <optgroup label="Audio">
-              <option>MP3</option><option>M4A</option><option>AAC</option><option>WAV</option><option>FLAC</option><option>OGG</option><option>OPUS</option>
-            </optgroup>
-            <optgroup label="Video">
-              <option>MP4</option><option>MOV</option><option>WEBM</option><option>MKV</option><option>AVI</option><option>GIF</option>
-            </optgroup>
-            <optgroup label="Images">
-              <option>JPG</option><option>PNG</option><option>WEBP</option><option>BMP</option><option>TIFF</option>
-            </optgroup>
-            <optgroup label="Archive">
-              <option>ZIP</option>
-            </optgroup>
-          </select>
-        </label>
-        <button id="convert" class="convert" disabled><span>Convert files</span><span class="arrow">→</span></button>
-      </div>
-    </div>
   </section>
 
   <section class="queue" id="queue" hidden>
