@@ -30,6 +30,7 @@ let ffmpegLog = [];
 let onFileProgress = () => {};
 let loaded = false;
 let converting = false;
+let activeRunId = 0;
 let files = [];
 let results = [];
 
@@ -396,9 +397,17 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
     } else if (sourceExt === 'rtf') {
       text = (await file.text()).replace(/\\par[d]?/gi,'\n').replace(/\\'[0-9a-f]{2}/gi,' ').replace(/\\[a-z]+-?\d* ?/gi,'').replace(/[{}]/g,'').trim();
     } else if (sourceExt === 'pdf') {
-      const pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs/+esm');
+      const pdfjs = await withTimeout(
+        import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs/+esm'),
+        60000,
+        'Timed out loading PDF support. Check your connection and try again.'
+      );
       pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
-      const pdf = await pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false}).promise;
+      const pdf = await withTimeout(
+        pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false}).promise,
+        5 * 60 * 1000,
+        file.name + ': PDF text extraction timed out.'
+      );
       const pages = [];
       for (let pageNo = 1; pageNo <= pdf.numPages; pageNo++) {
         reportProgress(0.15 + 0.5 * (pageNo - 1) / Math.max(1, pdf.numPages), 'Extracting PDF text (page ' + pageNo + ' of ' + pdf.numPages + ')');
@@ -481,7 +490,7 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
 }
 
 async function textToPdf(text) {
-  const { PDFDocument, StandardFonts, rgb } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+  const { PDFDocument, StandardFonts, rgb } = await withTimeout(import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const margin = 48, lineHeight = 14, maxChars = 96;
@@ -508,7 +517,7 @@ async function textToPdf(text) {
 }
 
 async function imageToPdf(file) {
-  const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+  const { PDFDocument } = await withTimeout(import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
   const pdf = await PDFDocument.create();
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement('canvas');
@@ -534,6 +543,7 @@ function mimeFor(ext) {
 }
 
 async function convertOne(file, index, total) {
+  const runId = activeRunId;
   const kind = fileKind(file);
   const base = 10 + (index / total) * 90;
   const span = 90 / total;
@@ -547,6 +557,7 @@ async function convertOne(file, index, total) {
   if (kind === 'Image' && ext === 'pdf') {
     setProgress(base, 'Preparing image for PDF: ' + file.name);
     const blob = await withTimeout(imageToPdf(file), 5 * 60 * 1000, file.name + ': image-to-PDF conversion timed out. Try a smaller image.');
+    if (!converting || runId !== activeRunId) return;
     results.push({name:file.name.replace(/\.[^.]+$/,'')+'.pdf',url:URL.createObjectURL(blob),size:blob.size});
     setProgress(base + span, 'Finished converting: ' + file.name);
     return;
@@ -554,6 +565,7 @@ async function convertOne(file, index, total) {
 
   if (['Document','Spreadsheet','Presentation'].includes(kind) && ext !== 'zip') {
     const reportProgress = (fraction, stage) => {
+      if (!converting || runId !== activeRunId) return;
       const value = base + span * Math.max(0, Math.min(1, fraction));
       setProgress(value, stage + ': ' + file.name);
     };
@@ -621,8 +633,9 @@ async function convertOne(file, index, total) {
     const zip = new JSZip();
     zip.file(file.name, file);
     const blob = await withTimeout(zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }, metadata => {
-      setProgress(base + span * (metadata.percent / 100), 'Creating ZIP archive: ' + file.name);
+      if (converting && runId === activeRunId) setProgress(base + span * (metadata.percent / 100), 'Creating ZIP archive: ' + file.name);
     }), 5 * 60 * 1000, file.name + ': ZIP creation timed out. Try a smaller file.');
+    if (!converting || runId !== activeRunId) return;
     const url = URL.createObjectURL(blob);
     results.push({
       name: file.name.replace(/\.[^.]+$/, '') + '.zip',
@@ -730,6 +743,7 @@ convert.onclick = async () => {
   if (!files.length || converting) return;
 
   converting = true;
+  activeRunId++;
   results.forEach(r => URL.revokeObjectURL(r.url));
   results = [];
   renderDownloads();
