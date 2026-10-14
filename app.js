@@ -12,6 +12,7 @@ const progress = document.querySelector('#progress');
 const progressLabel = document.querySelector('#progressLabel');
 const progressValue = document.querySelector('#progressValue');
 const progressBar = document.querySelector('#progressBar');
+const progressHeading = document.querySelector('#progressHeading');
 const downloads = document.querySelector('#downloads');
 const downloadList = document.querySelector('#downloadList');
 const downloadAll = document.querySelector('#downloadAll');
@@ -180,8 +181,10 @@ function add(list) {
   input.value = '';
 }
 
-function setProgress(value, label) {
+function setProgress(value, label, status = 'working') {
   progress.hidden = false;
+  progress.dataset.status = status;
+  progressHeading.textContent = status === 'error' ? 'Conversion failed' : status === 'done' ? 'Completed' : 'Converting';
   const v = Math.max(0, Math.min(100, Math.round(value)));
   progressValue.textContent = v + '%';
   progressBar.style.width = v + '%';
@@ -474,7 +477,7 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
   }
   reportProgress(0.96, 'Finishing converted file');
   outputName=file.name.replace(/\.[^.]+$/,'')+'.'+ext;
-  results.push({name:outputName,url:URL.createObjectURL(blob),size:blob.size});
+  return { name: outputName, blob, size: blob.size };
 }
 
 async function textToPdf(text) {
@@ -532,6 +535,8 @@ function mimeFor(ext) {
 
 async function convertOne(file, index, total) {
   const kind = fileKind(file);
+  const base = 10 + (index / total) * 90;
+  const span = 90 / total;
   const ext = file.output || defaultOutput(kind);
 
   const label = Object.keys(formats).find(k => formats[k] === ext);
@@ -540,24 +545,25 @@ async function convertOne(file, index, total) {
   }
 
   if (kind === 'Image' && ext === 'pdf') {
-    const blob = await imageToPdf(file);
+    setProgress(base, 'Preparing image for PDF: ' + file.name);
+    const blob = await withTimeout(imageToPdf(file), 5 * 60 * 1000, file.name + ': image-to-PDF conversion timed out. Try a smaller image.');
     results.push({name:file.name.replace(/\.[^.]+$/,'')+'.pdf',url:URL.createObjectURL(blob),size:blob.size});
+    setProgress(base + span, 'Finished converting: ' + file.name);
     return;
   }
 
   if (['Document','Spreadsheet','Presentation'].includes(kind) && ext !== 'zip') {
-    const base = 10 + (index / total) * 90;
-    const span = 90 / total;
     const reportProgress = (fraction, stage) => {
       const value = base + span * Math.max(0, Math.min(1, fraction));
       setProgress(value, stage + ': ' + file.name);
     };
     reportProgress(0, 'Preparing conversion');
-    await withTimeout(
+    const converted = await withTimeout(
       convertOffice(file, kind, ext, reportProgress),
       5 * 60 * 1000,
       file.name + ': conversion timed out after 5 minutes. Try a smaller file or another output format.'
     );
+    results.push({ name: converted.name, url: URL.createObjectURL(converted.blob), size: converted.size });
     reportProgress(1, 'Finished converting');
     return;
   }
@@ -573,9 +579,15 @@ async function convertOne(file, index, total) {
 
     const inName = 'input-' + index + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const framePattern = 'frame-' + index + '-%05d.jpg';
-    await ffmpeg.writeFile(inName, await fetchFile(file));
-    const base = 10 + (index / total) * 90;
-    const span = 90 / total;
+    setProgress(base, 'Preparing file for frame extraction: ' + file.name);
+    try {
+      await withTimeout((async () => ffmpeg.writeFile(inName, await fetchFile(file)))(), 5 * 60 * 1000, file.name + ': preparing the file for frame extraction timed out.');
+    } catch (error) {
+      try { ffmpeg?.terminate(); } catch {}
+      ffmpeg = null;
+      loaded = false;
+      throw error;
+    }
     const message = 'Extracting frames from ' + file.name;
     setProgress(base, message);
     onFileProgress = p => {
@@ -599,15 +611,18 @@ async function convertOne(file, index, total) {
       results.push({ name: file.name.replace(/\.[^.]+$/, '') + '-frames.zip', url: URL.createObjectURL(blob), size: blob.size });
     } finally {
       onFileProgress = () => {};
-      await ffmpeg.deleteFile(inName).catch(() => {});
+      if (ffmpeg) await ffmpeg.deleteFile(inName).catch(() => {});
     }
     return;
   }
 
   if (ext === 'zip') {
+    setProgress(base, 'Preparing ZIP archive: ' + file.name);
     const zip = new JSZip();
     zip.file(file.name, file);
-    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const blob = await withTimeout(zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }, metadata => {
+      setProgress(base + span * (metadata.percent / 100), 'Creating ZIP archive: ' + file.name);
+    }), 5 * 60 * 1000, file.name + ': ZIP creation timed out. Try a smaller file.');
     const url = URL.createObjectURL(blob);
     results.push({
       name: file.name.replace(/\.[^.]+$/, '') + '.zip',
@@ -617,7 +632,15 @@ async function convertOne(file, index, total) {
     return;
   }
 
-  await ffmpeg.writeFile(inName, await fetchFile(file));
+  setProgress(base, 'Preparing file for conversion: ' + file.name);
+  try {
+    await withTimeout((async () => ffmpeg.writeFile(inName, await fetchFile(file)))(), 5 * 60 * 1000, file.name + ': preparing the file timed out. Try a smaller file.');
+  } catch (error) {
+    try { ffmpeg?.terminate(); } catch {}
+    ffmpeg = null;
+    loaded = false;
+    throw error;
+  }
 
   let pal = '';
   try {
@@ -716,12 +739,12 @@ convert.onclick = async () => {
   try {
     if (files.some(file => !['zip','txt','md','html','docx','odt','rtf','xlsx','xls','csv','ods','pptx','pdf'].includes(file.output || defaultOutput(fileKind(file))))) await loadEngine();
     for (let i = 0; i < files.length; i++) await convertOne(files[i], i, files.length);
-    setProgress(100, 'Done — ' + results.length + ' file' + (results.length === 1 ? '' : 's'));
+    setProgress(100, 'Done — ' + results.length + ' file' + (results.length === 1 ? '' : 's'), 'done');
     renderDownloads();
     convert.textContent = 'Convert again';
   } catch (error) {
     console.error(error);
-    setProgress(0, error?.message || 'Conversion failed');
+    setProgress(0, error?.message || 'Conversion failed', 'error');
     renderDownloads();
     convert.textContent = 'Try again';
   } finally {
