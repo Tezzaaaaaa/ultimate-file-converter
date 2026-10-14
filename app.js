@@ -422,6 +422,48 @@ async function convertOffice(file, kind, ext) {
   results.push({name:outputName,url:URL.createObjectURL(blob),size:blob.size});
 }
 
+async function textToPdf(text) {
+  const { PDFDocument, StandardFonts, rgb } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const margin = 48, lineHeight = 14, maxChars = 96;
+  const lines = [];
+  for (const rawLine of String(text || '').replace(/\t/g, '    ').split(/\r?\n/)) {
+    let line = '';
+    for (const word of rawLine.split(/\s+/)) {
+      if (!word) continue;
+      if (line && line.length + 1 + word.length > maxChars) { lines.push(line); line = ''; }
+      let remaining = word;
+      while (remaining.length > maxChars) { if (line) { lines.push(line); line = ''; } lines.push(remaining.slice(0, maxChars)); remaining = remaining.slice(maxChars); }
+      line += (line ? ' ' : '') + remaining;
+    }
+    lines.push(line);
+  }
+  let page = pdf.addPage([612, 792]);
+  let y = page.getHeight() - margin;
+  for (const line of lines) {
+    if (y < margin) { page = pdf.addPage([612, 792]); y = page.getHeight() - margin; }
+    if (line) page.drawText(line, {x:margin, y, size:10, font, color:rgb(0.12,0.12,0.12), maxWidth:page.getWidth()-margin*2});
+    y -= lineHeight;
+  }
+  return new Blob([await pdf.save()], {type:'application/pdf'});
+}
+
+async function imageToPdf(file) {
+  const { PDFDocument } = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
+  const pdf = await PDFDocument.create();
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width; canvas.height = bitmap.height;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const png = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not decode image for PDF conversion.')), 'image/png'));
+  const image = await pdf.embedPng(await png.arrayBuffer());
+  const page = pdf.addPage([image.width, image.height]);
+  page.drawImage(image, {x:0, y:0, width:image.width, height:image.height});
+  return new Blob([await pdf.save()], {type:'application/pdf'});
+}
+
 function mimeFor(ext) {
   return {
     mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav',
