@@ -9,7 +9,6 @@ const items = document.querySelector('#items');
 const clear = document.querySelector('#clear');
 const appearance = document.querySelector('#appearance');
 const convert = document.querySelector('#convert');
-const format = document.querySelector('#format');
 const progress = document.querySelector('#progress');
 const progressLabel = document.querySelector('#progressLabel');
 const progressValue = document.querySelector('#progressValue');
@@ -72,6 +71,7 @@ const allowed = {
 };
 
 function canConvert(kind, label, fileName = '') {
+  if (kind === 'Audio' && label === 'GIF') return false;
   if (/\.gif$/i.test(fileName) && kind === 'Video' && groups.Audio.includes(label)) return false;
   return allowed[kind]?.includes(label) === true;
 }
@@ -86,6 +86,8 @@ function defaultOutput(kind) {
 function render() {
   queue.hidden = !files.length;
   convert.disabled = !files.length || converting;
+  input.disabled = converting;
+  clear.disabled = converting;
 
   document.querySelector('#queueTitle').textContent =
     files.length === 1 ? '1 file' : files.length + ' files';
@@ -111,7 +113,7 @@ function render() {
           choices +
         '</select>' +
       '</label>' +
-      '<button class="link remove" data-i="' + index + '">Remove</button>' +
+      '<button class="link remove" data-i="' + index + '"' + (converting ? ' disabled' : '') + '>Remove</button>' +
     '</div>';
   }).join('');
 
@@ -151,6 +153,7 @@ function add(list) {
 
   render();
   updateSourceCopy();
+  input.value = '';
 }
 
 function setProgress(value, label) {
@@ -337,7 +340,7 @@ async function convertOne(file, index, total) {
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
     const url = URL.createObjectURL(blob);
     results.push({
-      name: file.name + '.zip',
+      name: file.name.replace(/\.[^.]+$/, '') + '.zip',
       url,
       size: blob.size
     });
@@ -346,41 +349,43 @@ async function convertOne(file, index, total) {
 
   await ffmpeg.writeFile(inName, await fetchFile(file));
 
-  const base = 10 + (index / total) * 90;
-  const span = 90 / total;
-  const message = 'Converting ' + file.name;
-  setProgress(base, message);
-  // Install the progress listener before starting FFmpeg so the first
-  // progress event cannot be missed.
-  onFileProgress = p => {
-    if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
-  };
+  let pal = '';
+  try {
+    const base = 10 + (index / total) * 90;
+    const span = 90 / total;
+    const message = 'Converting ' + file.name;
+    setProgress(base, message);
+    // Install the progress listener before starting FFmpeg so the first
+    // progress event cannot be missed.
+    onFileProgress = p => {
+      if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
+    };
 
-  if (kind === 'Video' && ext === 'gif') {
-    const pal = 'pal-' + index + '.png';
-    await run(['-y', '-i', inName, '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full', pal], file.name);
-    await run(['-y', '-i', inName, '-i', pal, '-filter_complex',
-      '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse[v]',
-      '-map', '[v]', '-an', '-loop', '0', out], file.name);
-    await ffmpeg.deleteFile(pal).catch(() => {});
-  } else {
-    await run(commandFor(kind, ext, inName, out), file.name);
+    if (kind === 'Video' && ext === 'gif') {
+      pal = 'pal-' + index + '.png';
+      await run(['-y', '-i', inName, '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full', pal], file.name);
+      await run(['-y', '-i', inName, '-i', pal, '-filter_complex',
+        '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse[v]',
+        '-map', '[v]', '-an', '-loop', '0', out], file.name);
+    } else {
+      await run(commandFor(kind, ext, inName, out), file.name);
+    }
+
+    const data = await ffmpeg.readFile(out);
+    const blob = new Blob([data], { type: mimeFor(ext) });
+    const url = URL.createObjectURL(blob);
+
+    results.push({
+      name: file.name.replace(/\.[^.]+$/, '') + '.' + ext,
+      url,
+      size: blob.size
+    });
+  } finally {
+    onFileProgress = () => {};
+    await ffmpeg.deleteFile(inName).catch(() => {});
+    await ffmpeg.deleteFile(out).catch(() => {});
+    if (pal) await ffmpeg.deleteFile(pal).catch(() => {});
   }
-
-  onFileProgress = () => {};
-
-  const data = await ffmpeg.readFile(out);
-  const blob = new Blob([data], { type: mimeFor(ext) });
-  const url = URL.createObjectURL(blob);
-
-  results.push({
-    name: file.name.replace(/\.[^.]+$/, '') + '.' + ext,
-    url,
-    size: blob.size
-  });
-
-  await ffmpeg.deleteFile(inName).catch(() => {});
-  await ffmpeg.deleteFile(out).catch(() => {});
 }
 
 function renderDownloads() {
@@ -428,16 +433,6 @@ clear.onclick = () => {
   progress.hidden = true;
 };
 
-format.onchange = () => {
-  const target = format.value;
-  files.forEach(file => {
-    const kind = fileKind(file);
-    const label = Object.keys(formats).find(k => formats[k] === target);
-    if (canConvert(kind, label, file.name)) file.output = target;
-  });
-  render();
-};
-
 appearance.onclick = () => {
   document.body.classList.toggle('dark');
   localStorage.setItem('dark', document.body.classList.contains('dark'));
@@ -466,6 +461,7 @@ convert.onclick = async () => {
   } catch (error) {
     console.error(error);
     setProgress(0, error?.message || 'Conversion failed');
+    renderDownloads();
     convert.textContent = 'Try again';
   } finally {
     onFileProgress = () => {};
