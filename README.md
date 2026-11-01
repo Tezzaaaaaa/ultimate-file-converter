@@ -1,6 +1,6 @@
 # Convert.
 
-A private, browser-based universal file converter with an Apple-inspired interface.
+A private, browser-based universal file converter. The interface is built entirely from [shadcn/ui](https://ui.shadcn.com) components with [Lucide](https://lucide.dev) icons.
 
 **Live app:** https://tezzaaaaaa.github.io/ultimate-file-converter/
 
@@ -19,7 +19,16 @@ Convert batches of media, images, documents, spreadsheets and presentations dire
 - Spreadsheet conversion for XLSX, XLS, CSV and ODS, including basic text-based PDF export
 - Basic presentation text extraction/rebuilding for PPTX and ODP inputs
 - ZIP packaging, progress reporting, and individual or batch downloads
-- Responsive dark interface and reduced-motion support
+- Responsive light and dark interface with reduced-motion support
+
+## Design system
+
+- **Components:** shadcn/ui (new-york style) — `button`, `card`, `badge`, `select`, `progress`, `separator`, `input`, `label`, `alert`, `tooltip`, `dropdown-menu`, `scroll-area`
+- **Icons:** Lucide only (`lucide-react`), no custom icon fonts or emoji glyphs
+- **Styling:** Tailwind CSS v4 with shadcn CSS variables; Geist as the default typeface
+- **Theme:** dark by default, with light/system options persisted to `localStorage`
+
+The primitives live in `src/components/ui` and can be regenerated or extended with the shadcn CLI (`components.json` is configured for this project).
 
 ## Important format limitations
 
@@ -39,22 +48,43 @@ Files are selected and processed in the browser. The app does not implement a fi
 
 ## Run locally
 
-Serve the project through a local web server rather than opening `index.html` directly with `file://`, because browser module and WebAssembly security rules can block local-file execution.
+```bash
+npm install
+npm run dev      # local dev server
+npm run build    # typecheck + production build into dist/
+npm run preview  # serve the production build
+```
 
-The project is a static HTML, CSS and JavaScript app suitable for GitHub Pages or another static host.
+The project builds to a static `dist/` folder suitable for GitHub Pages or another static host. Serve the build through a web server rather than opening the file directly, because browser module and WebAssembly security rules can block `file://` execution.
 
 ## Technology
 
-- HTML, CSS and JavaScript
+- [React](https://react.dev) + [TypeScript](https://www.typescriptlang.org)
+- [Vite](https://vite.dev)
+- [Tailwind CSS v4](https://tailwindcss.com) with [shadcn/ui](https://ui.shadcn.com)
+- [Lucide](https://lucide.dev) icons
 - [FFmpeg WebAssembly](https://github.com/ffmpegwasm/ffmpeg.wasm) for media conversion
 - [SheetJS](https://sheetjs.com/) for spreadsheet processing
 - [JSZip](https://stuk.github.io/jszip/) for Office-file reading and ZIP creation
 - [pdf-lib](https://pdf-lib.js.org/) for PDF creation
 - [PDF.js](https://mozilla.github.io/pdf.js/) for text-based PDF extraction
 
+## Project structure
+
+```
+index.html               App shell (theme bootstrap, root element)
+src/main.tsx             React entry point
+src/App.tsx              Header, hero, steps, converter section, footer
+src/components/converter.tsx   Queue, progress and downloads UI
+src/components/format-guide.tsx Supported formats and privacy cards
+src/components/ui/       shadcn/ui primitives
+src/lib/formats.ts       Format metadata and capability rules
+src/lib/converter.ts     FFmpeg / document conversion engine
+```
+
 ## Branding
 
-The `favicon.svg` file is used for the browser-tab icon and the header logo.
+The `favicon.svg` file is used for the browser-tab icon.
 
 ## Credits and licensing
 

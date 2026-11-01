@@ -16,3 +16,10 @@
 # Temporary files
 *.tmp
 *.temp
+_logs
+
+# Node / build output
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
