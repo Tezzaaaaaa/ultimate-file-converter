@@ -1,98 +1,33 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#171a22">
-<meta name="description" content="Private browser-based converter for media, documents, spreadsheets, presentations and PDF files.">
-<meta name="theme-color" content="#171a22">
-<link rel="icon" href="./favicon.svg" type="image/svg+xml">
-<title>Convert.</title>
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<header>
-  <a class="brand" href="#" aria-label="Convert home"><span class="brand-mark"><img src="./favicon.svg" alt=""></span><span class="brand-word">convert<span>.</span></span></a>
-</header>
-
-<main>
-  <section class="hero">
-    <div class="eyebrow">Universal file converter</div>
-    <h1>Convert your files.</h1>
-    <p>Add your files, choose an output format for each, and convert them in your browser. Convert media, images, documents, spreadsheets, presentations and text-based PDFs in your browser. Office-to-PDF exports preserve readable content, not original page design; scanned PDFs need OCR.</p>
-  </section>
-
-  <section class="panel">
-    <div class="section-heading">
-      <div>
-        <h2>Add files</h2>
-        <p>Choose one or more files, or drag them here.</p>
-      </div>
-    </div>
-
-    <label class="drop" id="drop">
-      <input id="file" type="file" multiple hidden>
-      <span class="drop-icon">+</span>
-      <span class="drop-title" id="dropTitle">Add files</span>
-      <span class="drop-hint" id="dropHint">Click or drag and drop</span>
-    </label>
-
-  </section>
-
-  <section class="queue" id="queue" hidden>
-    <div class="section-heading compact">
-      <div>
-        <h2>Review & convert</h2>
-        <p>Check each file and change its output format if needed.</p>
-      </div>
-    </div>
-    <div class="queue-head">
-      <span id="queueTitle">Files</span>
-      <button class="link" id="clear" type="button">Clear all</button>
-    </div>
-    <div id="items"></div>
-    <div class="frame-options" id="frameOptions" hidden>
-      <label for="frameInterval">Extract a frame every</label>
-      <input id="frameInterval" type="number" min="0.1" max="3600" step="0.1" value="1">
-      <span>seconds · saved as a ZIP of JPG frames</span>
-    </div>
-    <button id="convert" class="convert" type="button" disabled><span>Convert files</span><span class="arrow">→</span></button>
-  </section>
-
-  <section class="progress" id="progress" hidden>
-    <div class="section-heading compact">
-      <div>
-        <h2 id="progressHeading">Converting</h2>
-        <p>Your files are being processed locally.</p>
-      </div>
-    </div>
-    <div class="progress-top">
-      <span id="progressLabel">Preparing…</span>
-      <span id="progressValue">0%</span>
-    </div>
-    <div class="progress-track"><span id="progressBar"></span></div>
-  </section>
-
-  <section class="downloads" id="downloads" hidden>
-    <div class="section-heading compact">
-      <div>
-        <h2>Ready</h2>
-        <p>Download your converted files.</p>
-      </div>
-    </div>
-    <div class="downloads-head">
-      <span>Files</span>
-      <button class="link" id="downloadAll" type="button">Download all</button>
-    </div>
-    <div id="downloadList"></div>
-  </section>
-</main>
-
-<footer>
-  <span>Private by design — files stay on your device.</span>
-  <span>Media · Documents · Spreadsheets · Presentations · PDF · ZIP</span>
-</footer>
-
-<script type="module" src="app.js"></script>
-</body>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta
+      name="description"
+      content="A private, browser-based converter for media, documents, spreadsheets, presentations and PDF files."
+    />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <title>Convert — browser-based file converter</title>
+    <script>
+      // Apply the stored theme before paint to avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var stored = localStorage.getItem('convert-theme') || 'dark';
+          var dark =
+            stored === 'dark' ||
+            (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (error) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
