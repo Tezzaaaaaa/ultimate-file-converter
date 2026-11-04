@@ -66,6 +66,22 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[c]));
 
+// Lucide's 24px outline icon language, kept inline so the static app has no UI runtime dependency.
+const iconPaths = {
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/>',
+  audio: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  video: '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+  sheet: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6M8 13h8M8 17h8M10 9H8"/>',
+  presentation: '<path d="M2 3h20M12 21V3m-7 8 7-4 7 4"/>',
+  archive: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 7v.01M12 11v.01M12 15v.01M12 19v.01"/>',
+  x: '<path d="m18 6-12 12M6 6l12 12"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/>',
+  loader: '<path d="M12 2v4m0 12v4m4.93-17.07-2.83 2.83m-4.24 4.24-2.83 2.83M22 12h-4M6 12H2m17.07 7.07-2.83-2.83m-4.24-4.24-2.83-2.83"/>',
+  arrow: '<path d="M5 12h14m-7-7 7 7-7 7"/>'
+};
+const icon = (name, size = 16) => '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (iconPaths[name] || iconPaths.file) + '</svg>';
+
 function fileKind(file) {
   if (file.type.startsWith('video/') || videoExt.test(file.name) || /\.gif$/i.test(file.name)) return 'Video';
   if (file.type.startsWith('image/') || imageExt.test(file.name) || /\.svg$/i.test(file.name)) return 'Image';
@@ -127,17 +143,19 @@ function render() {
           (value === selected ? ' selected' : '') + '>' + label + '</option>';
       }).join('');
 
+    const fileIcon = {Audio:'audio', Video:'video', Image:'image', Spreadsheet:'sheet', Presentation:'presentation', Document:'file', File:'file'}[kind] || 'file';
     return '<div class="item">' +
+      '<span class="file-badge">' + icon(fileIcon) + '</span>' +
       '<div class="file-info">' +
-        '<div class="name">' + esc(file.name) + '</div>' +
+        '<div class="name" title="' + esc(file.name) + '">' + esc(file.name) + '</div>' +
         '<div class="meta">' + esc(size(file.size)) + ' · ' + esc(kind) + '</div>' +
       '</div>' +
-      '<label class="row-format">Convert to' +
-        '<select class="select" data-i="' + index + '">' +
+      '<label class="row-format">Format' +
+        '<select class="select" aria-label="Output format for ' + esc(file.name) + '" data-i="' + index + '">' +
           choices +
         '</select>' +
       '</label>' +
-      '<button class="link remove" data-i="' + index + '"' + (converting ? ' disabled' : '') + '>Remove</button>' +
+      '<button class="remove" aria-label="Remove ' + esc(file.name) + '" title="Remove file" data-i="' + index + '"' + (converting ? ' disabled' : '') + '>' + icon('x', 14) + '</button>' +
     '</div>';
   }).join('');
 
@@ -177,7 +195,7 @@ function add(list) {
   results = [];
   renderDownloads();
   progress.hidden = true;
-  convert.textContent = 'Convert files';
+  convert.innerHTML = '<span>Convert files</span>' + icon('arrow', 16);
 
   incoming.forEach(file => {
     const kind = fileKind(file);
@@ -705,8 +723,9 @@ function renderDownloads() {
   downloads.hidden = !results.length;
   downloadList.innerHTML = results.map(r =>
     '<a class="download" href="' + r.url + '" download="' + esc(r.name) + '">' +
-      '<span><b>' + esc(r.name) + '</b><small>' + esc(size(r.size)) + '</small></span>' +
-      '<strong>Download</strong>' +
+      '<span class="file-badge">' + icon('file') + '</span>' +
+      '<span class="download-details"><b>' + esc(r.name) + '</b><small>' + esc(size(r.size)) + '</small></span>' +
+      '<strong>' + icon('download', 13) + ' Download</strong>' +
     '</a>'
   ).join('');
 }
@@ -755,19 +774,19 @@ convert.onclick = async () => {
   results = [];
   renderDownloads();
   render();
-  convert.textContent = 'Converting…';
+  convert.innerHTML = icon('loader', 15) + '<span>Converting…</span>';
 
   try {
     if (files.some(file => !['zip','txt','md','html','docx','odt','rtf','xlsx','xls','csv','ods','pptx','pdf'].includes(file.output || defaultOutput(fileKind(file))))) await loadEngine();
     for (let i = 0; i < files.length; i++) await convertOne(files[i], i, files.length);
     setProgress(100, 'Done — ' + results.length + ' file' + (results.length === 1 ? '' : 's'), 'done');
     renderDownloads();
-    convert.textContent = 'Convert again';
+    convert.innerHTML = '<span>Convert again</span>' + icon('arrow', 16);
   } catch (error) {
     console.error(error);
     setProgress(0, error?.message || 'Conversion failed', 'error');
     renderDownloads();
-    convert.textContent = 'Try again';
+    convert.innerHTML = '<span>Try again</span>' + icon('arrow', 16);
   } finally {
     onFileProgress = () => {};
     converting = false;

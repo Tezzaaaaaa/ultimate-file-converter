@@ -1,6 +1,6 @@
 # Convert.
 
-A private, browser-based universal file converter with an Apple-inspired interface.
+A private, browser-based universal file converter with a clean shadcn/ui-inspired interface and Lucide-style icons.
 
 **Live app:** https://tezzaaaaaa.github.io/ultimate-file-converter/
 
@@ -19,7 +19,7 @@ Convert batches of media, images, documents, spreadsheets and presentations dire
 - Spreadsheet conversion for XLSX, XLS, CSV and ODS, including basic text-based PDF export
 - Basic presentation text extraction/rebuilding for PPTX and ODP inputs
 - ZIP packaging, progress reporting, and individual or batch downloads
-- Responsive dark interface and reduced-motion support
+- Responsive shadcn/ui-inspired interface with Lucide-style icons and reduced-motion support
 
 ## Important format limitations
 
