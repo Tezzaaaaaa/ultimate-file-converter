@@ -3,96 +3,75 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#171a22">
+<meta name="theme-color" content="#ffffff">
 <meta name="description" content="Private browser-based converter for media, documents, spreadsheets, presentations and PDF files.">
-<meta name="theme-color" content="#171a22">
 <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-<title>Convert.</title>
+<title>Convert — Universal file converter</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
-  <a class="brand" href="#" aria-label="Convert home"><span class="brand-mark"><img src="./favicon.svg" alt=""></span><span class="brand-word">convert<span>.</span></span></a>
+<header class="site-header">
+  <a class="brand" href="#" aria-label="Convert home">
+    <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+    <span>convert<span class="brand-dot">.</span></span>
+  </a>
+  <div class="header-note"><span class="status-dot"></span> Private &amp; runs locally</div>
 </header>
 
-<main>
+<main class="page-shell">
   <section class="hero">
-    <div class="eyebrow">Universal file converter</div>
-    <h1>Convert your files.</h1>
-    <p>Add your files, choose an output format for each, and convert them in your browser. Convert media, images, documents, spreadsheets, presentations and text-based PDFs in your browser. Office-to-PDF exports preserve readable content, not original page design; scanned PDFs need OCR.</p>
+    <div class="eyebrow"><span class="eyebrow-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 17v3h14v-3"/></svg></span> THE UNIVERSAL FILE CONVERTER</div>
+    <h1>Files, meet their<br class="desktop-break"> new format.</h1>
+    <p>Convert images, audio, video, documents and more—all in one place. Drop in your files, choose a format, and you’re done.</p>
   </section>
 
-  <section class="panel">
-    <div class="section-heading">
-      <div>
-        <h2>Add files</h2>
-        <p>Choose one or more files, or drag them here.</p>
-      </div>
-    </div>
-
+  <section class="workspace" aria-label="File conversion workspace">
+    <div class="workspace-topline"><div><span class="workspace-step">01</span><span class="workspace-title">Add your files</span></div><span class="workspace-caption">Up to multiple files at once</span></div>
     <label class="drop" id="drop">
       <input id="file" type="file" multiple hidden>
-      <span class="drop-icon">+</span>
-      <span class="drop-title" id="dropTitle">Add files</span>
-      <span class="drop-hint" id="dropHint">Click or drag and drop</span>
+      <span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M20 16.5v2A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5v-2"/></svg></span>
+      <span class="drop-title" id="dropTitle">Choose files or drop them here</span>
+      <span class="drop-hint" id="dropHint">Browse your device to get started</span>
+      <span class="drop-browse">Browse files <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></span>
     </label>
-
+    <div class="trust-row"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></svg> Files never leave your device</span><span class="trust-separator"></span><span>Media · Images · Documents · More</span></div>
   </section>
 
-  <section class="queue" id="queue" hidden>
-    <div class="section-heading compact">
-      <div>
-        <h2>Review & convert</h2>
-        <p>Check each file and change its output format if needed.</p>
-      </div>
+  <section class="queue surface-card" id="queue" hidden>
+    <div class="section-heading">
+      <div><div class="step-label"><span class="workspace-step">02</span> CONVERSION QUEUE</div><h2>Review your files</h2><p>Choose an output format for each file before converting.</p></div>
+      <button class="button button-ghost" id="clear" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/></svg>Clear all</button>
     </div>
-    <div class="queue-head">
-      <span id="queueTitle">Files</span>
-      <button class="link" id="clear" type="button">Clear all</button>
-    </div>
+    <div class="queue-head"><span id="queueTitle">Files</span><span>OUTPUT FORMAT</span></div>
     <div id="items"></div>
     <div class="frame-options" id="frameOptions" hidden>
       <label for="frameInterval">Extract a frame every</label>
       <input id="frameInterval" type="number" min="0.1" max="3600" step="0.1" value="1">
       <span>seconds · saved as a ZIP of JPG frames</span>
     </div>
-    <button id="convert" class="convert" type="button" disabled><span>Convert files</span><span class="arrow">→</span></button>
+    <div class="queue-actions"><span class="privacy-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg> Secure, local processing</span><button id="convert" class="button button-primary" type="button" disabled><span>Convert files</span><svg class="button-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></button></div>
   </section>
 
-  <section class="progress" id="progress" hidden>
-    <div class="section-heading compact">
-      <div>
-        <h2 id="progressHeading">Converting</h2>
-        <p>Your files are being processed locally.</p>
-      </div>
-    </div>
-    <div class="progress-top">
-      <span id="progressLabel">Preparing…</span>
-      <span id="progressValue">0%</span>
-    </div>
+  <section class="progress surface-card" id="progress" hidden>
+    <div class="section-heading compact"><div><div class="step-label">YOUR CONVERSION</div><h2 id="progressHeading">Converting</h2><p>Your files are being processed locally.</p></div></div>
+    <div class="progress-top"><span id="progressLabel">Preparing…</span><span id="progressValue">0%</span></div>
     <div class="progress-track"><span id="progressBar"></span></div>
   </section>
 
-  <section class="downloads" id="downloads" hidden>
-    <div class="section-heading compact">
-      <div>
-        <h2>Ready</h2>
-        <p>Download your converted files.</p>
-      </div>
-    </div>
-    <div class="downloads-head">
-      <span>Files</span>
-      <button class="link" id="downloadAll" type="button">Download all</button>
-    </div>
+  <section class="downloads surface-card" id="downloads" hidden>
+    <div class="section-heading compact"><div><div class="step-label">READY TO GO</div><h2>Your files are ready</h2><p>Download a file or save everything at once.</p></div><button class="button button-outline" id="downloadAll" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></svg>Download all</button></div>
+    <div class="downloads-head"><span>Converted files</span></div>
     <div id="downloadList"></div>
+  </section>
+
+  <section class="feature-strip" aria-label="Why use Convert">
+    <div><span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg></span><span><b>Your files stay yours</b><small>Nothing is uploaded to a server.</small></span></div>
+    <div><span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></span><span><b>Quick and effortless</b><small>Convert multiple files in one go.</small></span></div>
+    <div><span class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18m9-9H3"/><path d="m5 5 14 14M19 5 5 19"/></svg></span><span><b>Formats for everything</b><small>Media, images, docs and more.</small></span></div>
   </section>
 </main>
 
-<footer>
-  <span>Private by design — files stay on your device.</span>
-  <span>Media · Documents · Spreadsheets · Presentations · PDF · ZIP</span>
-</footer>
-
+<footer><span>© 2026 Convert. Simple tools, thoughtfully made.</span><span class="footer-right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></svg> Private by design</span></footer>
 <script type="module" src="app.js"></script>
 </body>
 </html>
