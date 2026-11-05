@@ -1,4 +1,4 @@
-const CACHE_NAME='convert-offline-v1';
+const CACHE_NAME='convert-offline-__CACHE_VERSION__';
 self.addEventListener('install',e=>e.waitUntil((async()=>{const r=await fetch(new URL('./asset-manifest.json',self.registration.scope));if(!r.ok)throw Error('Offline manifest unavailable');const list=await r.json(),c=await caches.open(CACHE_NAME);await c.addAll(list.map(x=>new URL(x,self.registration.scope).href));await self.skipWaiting();})()));
 self.addEventListener('activate',e=>e.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('convert-offline-')&&k!==CACHE_NAME).map(k=>caches.delete(k)));await self.clients.claim();})()));
 self.addEventListener('fetch',e=>{const q=e.request;if(q.method!=='GET'||new URL(q.url).origin!==self.location.origin)return;e.respondWith((async()=>{const c=await caches.open(CACHE_NAME),hit=await c.match(q,{ignoreSearch:true});if(hit)return hit;try{const r=await fetch(q);if(r.ok&&r.type==='basic')await c.put(q,r.clone());return r;}catch(err){if(q.mode==='navigate'){const fallback=await c.match(new URL('./index.html',self.registration.scope).href);if(fallback)return fallback;}throw err;}})());});
