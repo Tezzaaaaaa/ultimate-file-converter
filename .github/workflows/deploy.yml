@@ -38,6 +38,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Create conversion test fixtures
         run: npm run fixtures
+      # Runs before any Pages deployment step, so the branch is verified even when
+      # deployment itself is limited to main by environment protection rules.
       - name: Verify offline conversions
         run: npm run test:offline
       - name: Setup Pages
