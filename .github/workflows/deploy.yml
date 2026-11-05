@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -34,6 +34,8 @@ jobs:
         run: npm run build
       - name: Install browser test dependencies
         run: npx playwright install --with-deps chromium
+      - name: Install FFmpeg test utility
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Create WebM test fixture
         run: |
           mkdir -p tests
