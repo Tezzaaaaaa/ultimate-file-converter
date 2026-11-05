@@ -16,3 +16,10 @@
 # Temporary files
 *.tmp
 *.temp
+
+# Build output and generated test artifacts
+dist/
+node_modules/
+tests/fixtures/
+tests/downloads/
+tests/offline-output.mp4

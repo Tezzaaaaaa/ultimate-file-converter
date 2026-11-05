@@ -291,9 +291,17 @@ function audioCodec(ext) {
   }[ext] || [];
 }
 
+// The bundled FFmpeg WASM build aborts ("memory access out of bounds") when the
+// mjpeg encoder is asked for a quality scale, so every JPEG write pins the
+// Huffman tables instead of relying on the optimised default.
+function jpegArgs(quality = 3) {
+  return ['-c:v', 'mjpeg', '-q:v', String(quality), '-huffman', '0'];
+}
+
 function videoCodec(ext) {
   // VP9 can hang in the single-threaded browser FFmpeg build. Use VP8 for reliable WebM conversion.
-  if (ext === 'webm') return ['-c:v', 'libvpx', '-crf', '32', '-b:v', '0', '-deadline', 'good', '-cpu-used', '5', '-c:a', 'libopus', '-b:a', '128k'];
+  // GIF sources carry an alpha channel that libvpx cannot encode with auto_alt_ref.
+  if (ext === 'webm') return ['-c:v', 'libvpx', '-crf', '32', '-b:v', '0', '-deadline', 'good', '-cpu-used', '5', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', '-b:a', '128k'];
   if (ext === 'avi') return ['-c:v', 'mpeg4', '-q:v', '4', '-c:a', 'mp3', '-b:a', '160k'];
   return ['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k'];
 }
@@ -337,9 +345,9 @@ function commandFor(sourceKind, ext, inputName, outputName) {
   }
 
   if (sourceKind === 'Video' && groups.Image.some(l => formats[l] === ext)) {
-    if (ext === 'jpg') args.push('-frames:v', '1', '-q:v', '3');
-    else if (ext === 'webp') args.push('-frames:v', '1', '-c:v', 'libwebp', '-quality', '90');
-    else args.push('-frames:v', '1');
+    args.push('-frames:v', '1');
+    if (ext === 'jpg') args.push(...jpegArgs());
+    else if (ext === 'webp') args.push('-c:v', 'libwebp', '-quality', '90');
     args.push(outputName);
     return args;
   }
@@ -358,9 +366,9 @@ function commandFor(sourceKind, ext, inputName, outputName) {
   }
   if (groups.Video.some(l => formats[l] === ext)) { args.push(...tagArgs(ext), ...videoCodec(ext), outputName); return args; }
   if (groups.Image.some(l => formats[l] === ext)) {
-    if (ext === 'jpg') args.push('-frames:v', '1', '-q:v', '3');
-    else if (ext === 'webp') args.push('-frames:v', '1', '-c:v', 'libwebp', '-quality', '90');
-    else args.push('-frames:v', '1');
+    args.push('-frames:v', '1');
+    if (ext === 'jpg') args.push(...jpegArgs());
+    else if (ext === 'webp') args.push('-c:v', 'libwebp', '-quality', '90');
     args.push(outputName);
     return args;
   }
@@ -371,7 +379,7 @@ function commandFor(sourceKind, ext, inputName, outputName) {
 
 async function convertOffice(file, kind, ext, reportProgress = () => {}) {
   const sourceExt = file.name.split('.').pop().toLowerCase();
-  let blob, outputName;
+  let blob, outputName, text = '';
   reportProgress(0.03, 'Loading document conversion tools');
   if (kind === 'Spreadsheet') {
     const XLSX = await withTimeout(
@@ -392,7 +400,6 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
       blob = new Blob([data], {type:mime});
     }
   } else {
-    let text = '';
     reportProgress(0.12, 'Reading document content');
     if (['txt','md'].includes(sourceExt)) text = await file.text();
     else if (['html','htm'].includes(sourceExt)) {
@@ -448,7 +455,10 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
       }
     }
     reportProgress(0.78, 'Preparing converted file');
-    if (kind === 'Presentation' && ext === 'pptx') {
+    if (ext === 'pdf') {
+      // Handled below by the shared text-to-PDF builder.
+      blob = null;
+    } else if (kind === 'Presentation' && ext === 'pptx') {
       const PptxGenJS = (await withTimeout(
         import('pptxgenjs'),
         60000,
@@ -497,10 +507,13 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
 async function textToPdf(text) {
   const { PDFDocument, StandardFonts, rgb } = await withTimeout(import('pdf-lib'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
   const pdf = await PDFDocument.create();
+  // StandardFonts are WinAnsi-encoded: strip glyphs they cannot encode so exotic
+  // characters cannot make the whole PDF export fail.
+  const safeText = String(text || '').replace(/[^\x09\x0a\x0d\x20-\x7e\xa0-\xff]/g, '?');
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const margin = 48, lineHeight = 14, maxChars = 96;
   const lines = [];
-  for (const rawLine of String(text || '').replace(/\t/g, '    ').split(/\r?\n/)) {
+  for (const rawLine of safeText.replace(/\t/g, '    ').split(/\r?\n/)) {
     let line = '';
     for (const word of rawLine.split(/\s+/)) {
       if (!word) continue;
@@ -521,10 +534,50 @@ async function textToPdf(text) {
   return new Blob([await pdf.save()], {type:'application/pdf'});
 }
 
+// Chromium's image decoders do not cover every raster format the app accepts
+// (TIFF in particular), so anything that fails to decode is converted to PNG by
+// the FFmpeg engine first.
+async function rasteriseForCanvas(file) {
+  if (/\.svg$/i.test(file.name) || file.type === 'image/svg+xml') {
+    const url = URL.createObjectURL(new Blob([await file.text()], { type: 'image/svg+xml' }));
+    try {
+      const img = new Image();
+      img.decoding = 'sync';
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error(file.name + ': this SVG could not be rendered.'));
+        img.src = url;
+      });
+      return await createImageBitmap(img);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  try {
+    return await createImageBitmap(file);
+  } catch {
+    await loadEngine();
+    const clean = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const inName = 'pdf-input-' + clean;
+    const outName = 'pdf-input-' + clean.replace(/\.[^.]+$/, '') + '.png';
+    try {
+      await ffmpeg.writeFile(inName, await fetchFile(file));
+      await run(['-y', '-i', inName, '-frames:v', '1', outName], file.name);
+      const data = await ffmpeg.readFile(outName);
+      return await createImageBitmap(new Blob([data], { type: 'image/png' }));
+    } finally {
+      if (ffmpeg) {
+        await ffmpeg.deleteFile(inName).catch(() => {});
+        await ffmpeg.deleteFile(outName).catch(() => {});
+      }
+    }
+  }
+}
+
 async function imageToPdf(file) {
   const { PDFDocument } = await withTimeout(import('pdf-lib'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
   const pdf = await PDFDocument.create();
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await rasteriseForCanvas(file);
   const canvas = document.createElement('canvas');
   canvas.width = bitmap.width; canvas.height = bitmap.height;
   canvas.getContext('2d').drawImage(bitmap, 0, 0);
@@ -559,13 +612,24 @@ async function convertOne(file, index, total) {
     throw new Error(file.name + ': cannot convert to ' + ext.toUpperCase());
   }
 
-  if (kind === 'Image' && ext === 'pdf') {
-    setProgress(base, 'Preparing image for PDF: ' + file.name);
-    const blob = await withTimeout(imageToPdf(file), 5 * 60 * 1000, file.name + ': image-to-PDF conversion timed out. Try a smaller image.');
-    if (!converting || runId !== activeRunId) return;
-    results.push({name:file.name.replace(/\.[^.]+$/,'')+'.pdf',url:URL.createObjectURL(blob),size:blob.size});
-    setProgress(base + span, 'Finished converting: ' + file.name);
-    return;
+  const svgSource = /\.svg$/i.test(file.name);
+  if (kind === 'Image' && (ext === 'pdf' || svgSource)) {
+    setProgress(base, (ext === 'pdf' ? 'Preparing image for PDF: ' : 'Rasterising image: ') + file.name);
+    if (ext === 'pdf') {
+      const blob = await withTimeout(imageToPdf(file), 5 * 60 * 1000, file.name + ': image-to-PDF conversion timed out. Try a smaller image.');
+      if (!converting || runId !== activeRunId) return;
+      results.push({name:file.name.replace(/\.[^.]+$/,'')+'.pdf',url:URL.createObjectURL(blob),size:blob.size});
+      setProgress(base + span, 'Finished converting: ' + file.name);
+      return;
+    }
+    // SVG has no FFmpeg decoder: rasterise through the browser, then convert the PNG.
+    const bitmap = await withTimeout(rasteriseForCanvas(file), 5 * 60 * 1000, file.name + ': this SVG could not be rendered. Try a simpler file.');
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width; canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const png = new Blob([await new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Could not render this SVG.')), 'image/png')).then(b => b.arrayBuffer())], { type: 'image/png' });
+    file = new File([png], file.name.replace(/\.[^.]+$/, '') + '.png', { type: 'image/png' });
   }
 
   if (['Document','Spreadsheet','Presentation'].includes(kind) && ext !== 'zip') {
@@ -612,7 +676,7 @@ async function convertOne(file, index, total) {
     };
 
     try {
-      await run(['-y', '-i', inName, '-vf', 'fps=1/' + interval, '-q:v', '3', framePattern], file.name);
+      await run(['-y', '-i', inName, '-vf', 'fps=1/' + interval, ...jpegArgs(), framePattern], file.name);
       const zip = new JSZip();
       let frameCount = 0;
       for (let frame = 1; ; frame++) {

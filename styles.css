@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
-
+/* DM Sans and Manrope are self-hosted by build.mjs so the app works fully offline. */
 :root{color-scheme:light;--background:#fff;--foreground:#09090b;--card:#fff;--card-foreground:#09090b;--muted:#f4f4f5;--muted-foreground:#71717a;--border:#e4e4e7;--input:#e4e4e7;--primary:#18181b;--primary-foreground:#fafafa;--secondary:#f4f4f5;--accent:#f4f4f5;--ring:#a1a1aa;--radius:10px;--body-font:"DM Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--display-font:"Manrope",ui-sans-serif,system-ui,sans-serif}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
