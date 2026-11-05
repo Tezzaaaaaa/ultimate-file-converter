@@ -35,7 +35,11 @@ This is a browser-based converter, not a full-fidelity Office rendering suite.
 
 ## Privacy and processing
 
-Files are selected and processed in the browser. The app does not implement a file-upload API or require an account. Conversion libraries and the FFmpeg WebAssembly runtime are loaded from public CDNs, so an internet connection is required for those dependencies. The app does not send the selected media files to a conversion server.
+Files are selected and processed in the browser. The app does not implement a file-upload API or require an account. The first visit requires an internet connection to load the app and install its offline cache. The service worker stores the application, FFmpeg WebAssembly engine and conversion libraries on this device. Once the offline cache has finished installing, the app can be reopened and used without an internet connection. Keep this site's stored data to retain offline support. Selected media files are never sent to a conversion server.
+
+## Offline use
+
+Open the site once while online and wait for the service worker to finish installing the offline cache. Subsequent visits and conversions can run without a network connection. The FFmpeg WebAssembly engine and its worker are served locally; conversion does not call a CDN.
 
 ## Run locally
 

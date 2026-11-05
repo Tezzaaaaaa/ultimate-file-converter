@@ -1,6 +1,6 @@
-import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/+esm';
-import { fetchFile, toBlobURL } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/+esm';
-import JSZip from 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
+import JSZip from 'jszip';
 
 const input = document.querySelector('#file');
 const drop = document.querySelector('#drop');
@@ -21,9 +21,8 @@ const sourceHint = document.querySelector('#dropHint');
 const frameOptions = document.querySelector('#frameOptions');
 const frameInterval = document.querySelector('#frameInterval');
 
-const CDN = 'https://cdn.jsdelivr.net/npm/';
-const CORE_BASE = CDN + '@ffmpeg/core@0.12.10/dist/esm/';
-const WORKER_URL = CDN + '@ffmpeg/ffmpeg@0.12.15/dist/esm/worker.js';
+const CORE_BASE = new URL('./ffmpeg/core/', import.meta.url).href;
+const WORKER_URL = new URL('./ffmpeg/lib/worker.js', import.meta.url).href;
 
 let ffmpeg = null;
 let ffmpegLog = [];
@@ -238,34 +237,15 @@ async function loadEngine() {
   ffmpeg.on('progress', ({ progress }) => onFileProgress(progress));
 
   try {
-    // Browsers block cross-origin Workers, so the worker is a same-origin blob that imports the CDN worker.
-    const workerURL = URL.createObjectURL(
-      new Blob(['import ' + JSON.stringify(WORKER_URL) + ';'], { type: 'text/javascript' })
+    setProgress(5, 'Loading local FFmpeg core…');
+    const coreURL = CORE_BASE + 'ffmpeg-core.js';
+    const wasmURL = CORE_BASE + 'ffmpeg-core.wasm';
+    setProgress(8, 'Starting local conversion engine…');
+    await withTimeout(
+      ffmpeg.load({ classWorkerURL: WORKER_URL, coreURL, wasmURL }),
+      60000,
+      'The offline conversion engine failed to start. Reload the app and retry.'
     );
-    try {
-      setProgress(5, 'Downloading FFmpeg core…');
-      const coreURL = await withTimeout(
-        toBlobURL(CORE_BASE + 'ffmpeg-core.js', 'text/javascript'),
-        60000,
-        'Timed out downloading the FFmpeg core. Check your connection and try again.'
-      );
-      setProgress(7, 'Downloading FFmpeg WebAssembly…');
-      const wasmURL = await withTimeout(
-        toBlobURL(CORE_BASE + 'ffmpeg-core.wasm', 'application/wasm'),
-        60000,
-        'Timed out downloading the FFmpeg WebAssembly engine. Check your connection and try again.'
-      );
-
-      setProgress(8, 'Starting conversion engine…');
-      // ffmpeg.load() may hang when its worker fails to start, so it is wrapped in a timeout.
-      await withTimeout(
-        ffmpeg.load({ classWorkerURL: workerURL, coreURL, wasmURL }),
-        60000,
-        'Conversion engine failed to start. Check that your browser allows workers and try again.'
-      );
-    } finally {
-      URL.revokeObjectURL(workerURL);
-    }
   } catch (error) {
     try { ffmpeg?.terminate(); } catch {}
     ffmpeg = null;
@@ -395,7 +375,7 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
   reportProgress(0.03, 'Loading document conversion tools');
   if (kind === 'Spreadsheet') {
     const XLSX = await withTimeout(
-      import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/+esm'),
+      import('xlsx'),
       60000,
       'Timed out loading spreadsheet support. Check your connection and try again.'
     );
@@ -423,11 +403,11 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
       text = (await file.text()).replace(/\\par[d]?/gi,'\n').replace(/\\'[0-9a-f]{2}/gi,' ').replace(/\\[a-z]+-?\d* ?/gi,'').replace(/[{}]/g,'').trim();
     } else if (sourceExt === 'pdf') {
       const pdfjs = await withTimeout(
-        import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs/+esm'),
+        import('pdfjs-dist/build/pdf.mjs'),
         60000,
         'Timed out loading PDF support. Check your connection and try again.'
       );
-      pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.mjs', import.meta.url).href;
       const pdf = await withTimeout(
         pdfjs.getDocument({data: new Uint8Array(await file.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false}).promise,
         5 * 60 * 1000,
@@ -470,7 +450,7 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
     reportProgress(0.78, 'Preparing converted file');
     if (kind === 'Presentation' && ext === 'pptx') {
       const PptxGenJS = (await withTimeout(
-        import('https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/+esm'),
+        import('pptxgenjs'),
         60000,
         'Timed out loading presentation support. Check your connection and try again.'
       )).default;
@@ -515,7 +495,7 @@ async function convertOffice(file, kind, ext, reportProgress = () => {}) {
 }
 
 async function textToPdf(text) {
-  const { PDFDocument, StandardFonts, rgb } = await withTimeout(import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
+  const { PDFDocument, StandardFonts, rgb } = await withTimeout(import('pdf-lib'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const margin = 48, lineHeight = 14, maxChars = 96;
@@ -542,7 +522,7 @@ async function textToPdf(text) {
 }
 
 async function imageToPdf(file) {
-  const { PDFDocument } = await withTimeout(import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
+  const { PDFDocument } = await withTimeout(import('pdf-lib'), 60000, 'Timed out loading PDF creation support. Check your connection and try again.');
   const pdf = await PDFDocument.create();
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement('canvas');
@@ -794,3 +774,8 @@ convert.onclick = async () => {
     if (files.length) convert.disabled = false;
   }
 };
+
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(error => console.error('Offline cache registration failed:', error)), { once: true });
+}
