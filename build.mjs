@@ -1,9 +1,9 @@
-import {build} from 'esbuild';import{cp,mkdir,readdir,rm,stat,writeFile}from'node:fs/promises';import path from'node:path';
+import {build} from 'esbuild';import{cp,mkdir,readdir,rm,stat,writeFile,readFile}from'node:fs/promises';import{createHash}from'node:crypto';import path from'node:path';
 const root=process.cwd(),out=path.join(root,'dist');await rm(out,{recursive:true,force:true});await mkdir(out,{recursive:true});
 await build({entryPoints:['app.js'],bundle:true,splitting:true,format:'esm',platform:'browser',target:['es2022'],outdir:out,entryNames:'app',chunkNames:'chunks/[name]-[hash]',assetNames:'assets/[name]-[hash]',sourcemap:false,legalComments:'none'});
-for(const f of['index.html','styles.css','favicon.svg','sw.js'])await cp(path.join(root,f),path.join(out,f));
+for(const f of['index.html','styles.css','favicon.svg'])await cp(path.join(root,f),path.join(out,f));
 await mkdir(path.join(out,'ffmpeg/lib'),{recursive:true});await mkdir(path.join(out,'ffmpeg/core'),{recursive:true});await mkdir(path.join(out,'vendor'),{recursive:true});
 await cp('node_modules/@ffmpeg/ffmpeg/dist/esm',path.join(out,'ffmpeg/lib'),{recursive:true});await cp('node_modules/@ffmpeg/core/dist/esm',path.join(out,'ffmpeg/core'),{recursive:true});await cp('node_modules/pdfjs-dist/build/pdf.worker.mjs',path.join(out,'vendor/pdf.worker.mjs'));
 async function walk(d,p=''){let out=[];for(const e of await readdir(d,{withFileTypes:true})){const r=path.posix.join(p,e.name);if(e.isDirectory())out.push(...await walk(path.join(d,e.name),r));else out.push('./'+r);}return out;}
-const assets=await walk(out);assets.push('./asset-manifest.json');await writeFile(path.join(out,'asset-manifest.json'),JSON.stringify(assets,null,2));
+const assets=await walk(out);assets.push('./sw.js','./asset-manifest.json');const manifest=JSON.stringify(assets,null,2);await writeFile(path.join(out,'asset-manifest.json'),manifest);const hash=createHash('sha256');for(const asset of assets.filter(x=>x!=='./sw.js'&&x!=='./asset-manifest.json'))hash.update(await readFile(path.join(out,asset.slice(2))));const sw=(await readFile(path.join(root,'sw.js'),'utf8')).replace('__CACHE_VERSION__',hash.digest('hex').slice(0,12));await writeFile(path.join(out,'sw.js'),sw);
 const wasm=await stat(path.join(out,'ffmpeg/core/ffmpeg-core.wasm'));if(wasm.size<10_000_000)throw Error('FFmpeg WASM core missing');console.log('Built '+assets.length+' offline assets; FFmpeg WASM '+(wasm.size/1048576).toFixed(1)+' MB');
