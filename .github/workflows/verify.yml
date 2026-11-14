@@ -1,0 +1,35 @@
+name: Verify conversions
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build self-hosted offline app
+        run: npm run build
+      - name: Install browser test dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Install FFmpeg test utility
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Create conversion test fixtures
+        run: npm run fixtures
+      - name: Verify offline conversions
+        run: npm run test:offline
