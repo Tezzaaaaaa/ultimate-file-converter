@@ -90,6 +90,7 @@ try{
 
   const selectedCases=process.env.PLAYWRIGHT_BROWSER==='webkit'?cases.filter(([,label])=>label==='MP4'):cases;
   for(const[file,label,check,description]of selectedCases){
+    console.log('START: '+file+' -> '+label+' in '+(engine===webkit?'iPhone WebKit':'Chromium'));
     try{
       const out=await convert(file,label);
       const buf=await readFile(out);
@@ -105,6 +106,7 @@ try{
     }catch(error){
       failures.push(file+' -> '+label+': '+error.message);
       console.log('FAIL: '+file+' -> '+label+': '+error.message);
+      if(engine===webkit)break;
     }
   }
 
