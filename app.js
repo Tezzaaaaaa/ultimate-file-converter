@@ -339,6 +339,23 @@ function commandFor(sourceKind, ext, inputName, outputName) {
 
   args.push('-i', inputName);
 
+  // Normalise WebM and other video containers to a broadly compatible MP4.
+  // Explicit optional stream maps prevent subtitle/data/attachment streams from
+  // interfering with muxing, while still supporting video-only and audio-only WebM.
+  if (sourceKind === 'Video' && ext === 'mp4') {
+    args.push(
+      '-map', '0:v:0?', '-map', '0:a:0?',
+      '-sn', '-dn',
+      ...tagArgs(ext),
+      '-movflags', '+faststart+use_metadata_tags',
+      '-max_muxing_queue_size', '2048',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '160k',
+      outputName
+    );
+    return args;
+  }
+
   if (sourceKind === 'Video' && groups.Audio.some(l => formats[l] === ext)) {
     args.push('-vn', ...tagArgs(ext), ...audioCodec(ext), outputName);
     return args;

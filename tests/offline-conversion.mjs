@@ -66,6 +66,8 @@ try{
 
   const cases=[
     ['fixture.webm','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'H.264 MP4'],
+    ['fixture-vp9.webm','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'VP9 to H.264 MP4'],
+    ['fixture-audio.webm','MP4',buf=>buf.includes(Buffer.from('mp4a')),'audio-only WebM to AAC MP4'],
     // Regression: the bundled mjpeg encoder aborted on video input.
     ['fixture.webm','JPG',buf=>buf[0]===0xFF&&buf[1]===0xD8&&buf[buf.length-2]===0xFF&&buf[buf.length-1]===0xD9,'valid JPEG'],
     ['fixture.png','JPG',buf=>buf[0]===0xFF&&buf[1]===0xD8,'valid JPEG from image input'],
