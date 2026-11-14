@@ -243,7 +243,7 @@ async function loadEngine() {
     setProgress(8, 'Starting local conversion engine…');
     await withTimeout(
       ffmpeg.load({ classWorkerURL: WORKER_URL, coreURL, wasmURL }),
-      60000,
+      180000,
       'The offline conversion engine failed to start. Reload the app and retry.'
     );
   } catch (error) {
@@ -349,8 +349,8 @@ function commandFor(sourceKind, ext, inputName, outputName) {
       ...tagArgs(ext),
       '-movflags', '+faststart+use_metadata_tags',
       '-max_muxing_queue_size', '2048',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '160k',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-threads', '1',
+      '-c:a', 'aac', '-b:a', '160k', '-threads', '1',
       outputName
     );
     return args;
