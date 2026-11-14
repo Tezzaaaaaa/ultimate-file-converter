@@ -85,11 +85,18 @@ try{
     ['fixture.png','PDF',buf=>buf.subarray(0,5).toString()==='%PDF-','PDF from image'],
   ];
 
-  for(const[file,label,check,description]of cases){
+  const selectedCases=process.env.PLAYWRIGHT_BROWSER==='webkit'?cases.filter(([,label])=>label==='MP4'):cases;
+  for(const[file,label,check,description]of selectedCases){
     try{
       const out=await convert(file,label);
       const buf=await readFile(out);
       if(!check(buf))throw Error('unexpected output content');
+      if(label==='MP4'&&/\.webm$/i.test(file)){
+        const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=format_name:stream=codec_name,codec_type','-of','json',out],{encoding:'utf8'}));
+        const names=probe.streams.map(stream=>stream.codec_type+':'+stream.codec_name);
+        if(!probe.format?.format_name?.split(',').includes('mp4'))throw Error('output is not a valid MP4 container');
+        if(file==='fixture-audio.webm'?!names.includes('audio:aac'):!names.includes('video:h264'))throw Error('expected H.264/AAC streams missing: '+names.join(', '));
+      }
       console.log('PASS: '+file+' -> '+label+' ('+description+', '+(buf.length/1024).toFixed(1)+' KB)');
     }catch(error){
       failures.push(file+' -> '+label+': '+error.message);
