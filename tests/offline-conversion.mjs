@@ -95,7 +95,8 @@ try{
         const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=format_name:stream=codec_name,codec_type','-of','json',out],{encoding:'utf8'}));
         const names=probe.streams.map(stream=>stream.codec_type+':'+stream.codec_name);
         if(!probe.format?.format_name?.split(',').includes('mp4'))throw Error('output is not a valid MP4 container');
-        if(file==='fixture-audio.webm'?!names.includes('audio:aac'):!names.includes('video:h264'))throw Error('expected H.264/AAC streams missing: '+names.join(', '));
+        const expected=file==='fixture-audio.webm'?['audio:aac']:['video:h264','audio:aac'];
+        if(expected.some(codec=>!names.includes(codec)))throw Error('expected streams missing: '+names.join(', '));
       }
       console.log('PASS: '+file+' -> '+label+' ('+description+', '+(buf.length/1024).toFixed(1)+' KB)');
     }catch(error){
