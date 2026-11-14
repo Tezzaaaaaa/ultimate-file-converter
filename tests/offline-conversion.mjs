@@ -1,4 +1,4 @@
-import{chromium}from'playwright';import{createServer}from'node:http';import{readFile,mkdir}from'node:fs/promises';import{extname,resolve}from'node:path';import{execFileSync}from'node:child_process';
+import{chromium,webkit,devices}from'playwright';import{createServer}from'node:http';import{readFile,mkdir}from'node:fs/promises';import{extname,resolve}from'node:path';import{execFileSync}from'node:child_process';
 
 // Offline regression suite. Every case runs with the network switched off after
 // the service worker has installed, so a missing offline asset or a conversion
@@ -17,10 +17,10 @@ const server=createServer(async(req,res)=>{try{
 await new Promise(ok=>server.listen(4173,'127.0.0.1',ok));
 await mkdir(downloads,{recursive:true});
 
-const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+const engine=process.env.PLAYWRIGHT_BROWSER==='webkit'?webkit:chromium;\nconst browser=await engine.launch({headless:true,...(engine===chromium?{args:['--no-sandbox']}:{})});
 let failures=[];
 try{
-  const ctx=await browser.newContext({acceptDownloads:true,serviceWorkers:'allow'}),p=await ctx.newPage();
+  const device=process.env.PLAYWRIGHT_BROWSER==='webkit'?devices['iPhone 13']:{};\n  const ctx=await browser.newContext({...device,acceptDownloads:true,serviceWorkers:'allow'}),p=await ctx.newPage();
   const errors=[],external=[];
   p.on('pageerror',e=>errors.push(e.message));
   p.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173'))external.push(r.url());});
@@ -36,7 +36,7 @@ try{
   if(cache.fonts<9)failures.push('UI fonts missing from offline cache: '+cache.fonts);
   if(cache.external.length)failures.push('offline cache holds remote URLs: '+cache.external.join(', '));
   if(external.length)failures.push('page requested external URLs: '+external.join(', '));
-  console.log('offline cache: '+cache.count+' entries, '+cache.fonts+' fonts, 0 external');
+  console.log((process.env.PLAYWRIGHT_BROWSER==='webkit'?'iPhone WebKit':'Chromium')+' offline cache: '+cache.count+' entries, '+cache.fonts+' fonts, 0 external');
 
   await ctx.setOffline(true);
 
