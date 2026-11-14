@@ -256,6 +256,26 @@ async function loadEngine() {
   loaded = true;
 }
 
+async function mountInputFile(file, index) {
+  const mountPoint = '/input-' + index;
+  await ffmpeg.createDir(mountPoint);
+  try {
+    const mounted = await ffmpeg.mount('WORKERFS', { files: [file] }, mountPoint);
+    if (!mounted) throw new Error(file.name + ': the browser could not mount this file for low-memory conversion.');
+    return {
+      path: mountPoint + '/' + file.name,
+      cleanup: async () => {
+        if (!ffmpeg) return;
+        await ffmpeg.unmount(mountPoint).catch(() => {});
+        await ffmpeg.deleteDir(mountPoint).catch(() => {});
+      }
+    };
+  } catch (error) {
+    if (ffmpeg) await ffmpeg.deleteDir(mountPoint).catch(() => {});
+    throw error;
+  }
+}
+
 async function run(args, name) {
   ffmpegLog = [];
   let code;
@@ -675,17 +695,10 @@ async function convertOne(file, index, total) {
       throw new Error('Frame interval must be between 0.1 and 3600 seconds.');
     }
 
-    const inName = 'input-' + index + '-' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const framePattern = 'frame-' + index + '-%05d.jpg';
     setProgress(base, 'Preparing file for frame extraction: ' + file.name);
-    try {
-      await withTimeout((async () => ffmpeg.writeFile(inName, await fetchFile(file)))(), 5 * 60 * 1000, file.name + ': preparing the file for frame extraction timed out.');
-    } catch (error) {
-      try { ffmpeg?.terminate(); } catch {}
-      ffmpeg = null;
-      loaded = false;
-      throw error;
-    }
+    const mountedInput = await withTimeout(mountInputFile(file, index), 5 * 60 * 1000, file.name + ': preparing the file for frame extraction timed out.');
+    const inputPath = mountedInput.path;
     const message = 'Extracting frames from ' + file.name;
     setProgress(base, message);
     onFileProgress = p => {
@@ -693,7 +706,7 @@ async function convertOne(file, index, total) {
     };
 
     try {
-      await run(['-y', '-i', inName, '-vf', 'fps=1/' + interval, ...jpegArgs(), framePattern], file.name);
+      await run(['-y', '-i', inputPath, '-vf', 'fps=1/' + interval, ...jpegArgs(), framePattern], file.name);
       const zip = new JSZip();
       let frameCount = 0;
       for (let frame = 1; ; frame++) {
@@ -709,7 +722,7 @@ async function convertOne(file, index, total) {
       results.push({ name: file.name.replace(/\.[^.]+$/, '') + '-frames.zip', url: URL.createObjectURL(blob), size: blob.size });
     } finally {
       onFileProgress = () => {};
-      if (ffmpeg) await ffmpeg.deleteFile(inName).catch(() => {});
+      await mountedInput.cleanup();
     }
     return;
   }
@@ -732,12 +745,17 @@ async function convertOne(file, index, total) {
   }
 
   setProgress(base, 'Preparing file for conversion: ' + file.name);
+  let mountedInput = null;
+  let inputPath = inName;
   try {
-    await withTimeout((async () => ffmpeg.writeFile(inName, await fetchFile(file)))(), 5 * 60 * 1000, file.name + ': preparing the file timed out. Try a smaller file.');
+    if (kind === 'Video') {
+      mountedInput = await withTimeout(mountInputFile(file, index), 5 * 60 * 1000, file.name + ': preparing the file for conversion timed out.');
+      inputPath = mountedInput.path;
+    } else {
+      await withTimeout((async () => ffmpeg.writeFile(inName, await fetchFile(file)))(), 5 * 60 * 1000, file.name + ': preparing the file timed out. Try a smaller file.');
+    }
   } catch (error) {
-    try { ffmpeg?.terminate(); } catch {}
-    ffmpeg = null;
-    loaded = false;
+    if (mountedInput) await mountedInput.cleanup();
     throw error;
   }
 
@@ -755,12 +773,12 @@ async function convertOne(file, index, total) {
 
     if (kind === 'Video' && ext === 'gif') {
       pal = 'pal-' + index + '.png';
-      await run(['-y', '-i', inName, '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full', pal], file.name);
-      await run(['-y', '-i', inName, '-i', pal, '-filter_complex',
+      await run(['-y', '-i', inputPath, '-vf', 'fps=12,scale=1280:-1:flags=lanczos,palettegen=stats_mode=full', pal], file.name);
+      await run(['-y', '-i', inputPath, '-i', pal, '-filter_complex',
         '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse[v]',
         '-map', '[v]', '-an', '-loop', '0', out], file.name);
     } else {
-      await run(commandFor(kind, ext, inName, out), file.name);
+      await run(commandFor(kind, ext, inputPath, out), file.name);
     }
 
     const data = await ffmpeg.readFile(out);
@@ -774,9 +792,10 @@ async function convertOne(file, index, total) {
     });
   } finally {
     onFileProgress = () => {};
-    await ffmpeg.deleteFile(inName).catch(() => {});
-    await ffmpeg.deleteFile(out).catch(() => {});
-    if (pal) await ffmpeg.deleteFile(pal).catch(() => {});
+    if (mountedInput) await mountedInput.cleanup();
+    else if (ffmpeg) await ffmpeg.deleteFile(inName).catch(() => {});
+    if (ffmpeg) await ffmpeg.deleteFile(out).catch(() => {});
+    if (pal && ffmpeg) await ffmpeg.deleteFile(pal).catch(() => {});
   }
 }
 

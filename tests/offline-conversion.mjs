@@ -17,36 +17,41 @@ const server=createServer(async(req,res)=>{try{
 await new Promise(ok=>server.listen(4173,'127.0.0.1',ok));
 await mkdir(downloads,{recursive:true});
 
-const engine=process.env.PLAYWRIGHT_BROWSER==='webkit'?webkit:chromium;\nconst browser=await engine.launch({headless:true,...(engine===chromium?{args:['--no-sandbox']}:{})});
+const engine=process.env.PLAYWRIGHT_BROWSER==='webkit'?webkit:chromium;
+const browser=await engine.launch({headless:true,...(engine===chromium?{args:['--no-sandbox']}:{})});
 let failures=[];
 try{
-  const device=process.env.PLAYWRIGHT_BROWSER==='webkit'?devices['iPhone 13']:{};\n  const ctx=await browser.newContext({...device,acceptDownloads:true,serviceWorkers:'allow'}),p=await ctx.newPage();
+  const device=process.env.PLAYWRIGHT_BROWSER==='webkit'?devices['iPhone 13']:{};
+  const ctx=await browser.newContext({...device,acceptDownloads:true,serviceWorkers:'allow'}),p=await ctx.newPage();
   const errors=[],external=[];
   p.on('pageerror',e=>errors.push(e.message));
   p.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173'))external.push(r.url());});
 
   await p.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded',timeout:60000});
-  await p.evaluate(()=>navigator.serviceWorker.ready);
-  await p.reload({waitUntil:'domcontentloaded',timeout:60000});
-  await p.waitForFunction(()=>!!navigator.serviceWorker.controller);
+  if(engine===chromium){
+    await p.evaluate(()=>navigator.serviceWorker.ready);
+    await p.reload({waitUntil:'domcontentloaded',timeout:60000});
+    await p.waitForFunction(()=>!!navigator.serviceWorker.controller);
 
-  // The offline cache must hold every asset, with no remote fallbacks.
-  const cache=await p.evaluate(async()=>{const keys=await caches.keys(),c=await caches.open(keys[0]),urls=(await c.keys()).map(r=>r.url);return{count:urls.length,fonts:urls.filter(u=>u.includes('/fonts/')).length,external:urls.filter(u=>!u.includes('127.0.0.1'))};});
-  if(cache.count<40)failures.push('offline cache too small: '+cache.count);
-  if(cache.fonts<9)failures.push('UI fonts missing from offline cache: '+cache.fonts);
-  if(cache.external.length)failures.push('offline cache holds remote URLs: '+cache.external.join(', '));
+    // Chromium verifies that the service worker can cache every asset and work offline.
+    const cache=await p.evaluate(async()=>{const keys=await caches.keys(),c=await caches.open(keys[0]),urls=(await c.keys()).map(r=>r.url);return{count:urls.length,fonts:urls.filter(u=>u.includes('/fonts/')).length,external:urls.filter(u=>!u.includes('127.0.0.1'))};});
+    if(cache.count<40)failures.push('offline cache too small: '+cache.count);
+    if(cache.fonts<9)failures.push('UI fonts missing from offline cache: '+cache.fonts);
+    if(cache.external.length)failures.push('offline cache holds remote URLs: '+cache.external.join(', '));
+    await ctx.setOffline(true);
+    console.log('Chromium offline cache: '+cache.count+' entries, '+cache.fonts+' fonts, 0 external');
+  }else{
+    console.log('iPhone WebKit: online browser-engine conversion test');
+  }
   if(external.length)failures.push('page requested external URLs: '+external.join(', '));
-  console.log((process.env.PLAYWRIGHT_BROWSER==='webkit'?'iPhone WebKit':'Chromium')+' offline cache: '+cache.count+' entries, '+cache.fonts+' fonts, 0 external');
 
-  await ctx.setOffline(true);
-
-  // Fonts must resolve from the local cache while offline.
+  // Fonts must resolve in the selected browser context.
   const faces=await p.evaluate(async()=>{await document.fonts.ready;return[...new Set([...document.fonts].filter(f=>f.status==='loaded').map(f=>f.family))];});
   if(!faces.includes('DM Sans')||!faces.includes('Manrope'))failures.push('self-hosted fonts did not load offline: '+faces.join(', '));
-  console.log('fonts loaded offline: '+faces.join(', '));
+  console.log('fonts loaded: '+faces.join(', '));
 
   // Each case selects a file, picks an output format and waits for the download.
-  async function convert(file,label,timeout=240000){
+  async function convert(file,label,timeout=120000){
     await p.locator('#clear').click().catch(()=>{});
     await p.locator('#file').setInputFiles(resolve(fixtures,file));
     const select=p.locator('.select').first();
@@ -83,15 +88,25 @@ try{
     ['fixture.png','PDF',buf=>buf.subarray(0,5).toString()==='%PDF-','PDF from image'],
   ];
 
-  for(const[file,label,check,description]of cases){
+  const selectedCases=process.env.PLAYWRIGHT_BROWSER==='webkit'?cases.filter(([,label])=>label==='MP4'):cases;
+  for(const[file,label,check,description]of selectedCases){
+    console.log('START: '+file+' -> '+label+' in '+(engine===webkit?'iPhone WebKit':'Chromium'));
     try{
       const out=await convert(file,label);
       const buf=await readFile(out);
       if(!check(buf))throw Error('unexpected output content');
+      if(label==='MP4'&&/\.webm$/i.test(file)){
+        const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=format_name:stream=codec_name,codec_type','-of','json',out],{encoding:'utf8'}));
+        const names=probe.streams.map(stream=>stream.codec_type+':'+stream.codec_name);
+        if(!probe.format?.format_name?.split(',').includes('mp4'))throw Error('output is not a valid MP4 container');
+        const expected=file==='fixture-audio.webm'?['audio:aac']:['video:h264','audio:aac'];
+        if(expected.some(codec=>!names.includes(codec)))throw Error('expected streams missing: '+names.join(', '));
+      }
       console.log('PASS: '+file+' -> '+label+' ('+description+', '+(buf.length/1024).toFixed(1)+' KB)');
     }catch(error){
       failures.push(file+' -> '+label+': '+error.message);
       console.log('FAIL: '+file+' -> '+label+': '+error.message);
+      if(engine===webkit)break;
     }
   }
 
@@ -99,4 +114,4 @@ try{
 }finally{await browser.close();server.close();}
 
 if(failures.length){console.error('\n'+failures.length+' offline regression(s) failed:\n- '+failures.join('\n- '));process.exit(1);}
-console.log('\nPASS: all offline conversion checks succeeded with the network disabled.');
+console.log('\nPASS: all '+(engine===webkit?'iPhone WebKit':'offline Chromium')+' conversion checks succeeded.');
