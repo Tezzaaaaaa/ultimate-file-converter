@@ -26,10 +26,12 @@ jobs:
       - name: Build self-hosted offline app
         run: npm run build
       - name: Install browser test dependencies
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
       - name: Install FFmpeg test utility
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Create conversion test fixtures
         run: npm run fixtures
       - name: Verify offline conversions
         run: npm run test:offline
+      - name: Verify WebM conversions in iPhone WebKit
+        run: PLAYWRIGHT_BROWSER=webkit npm run test:offline
