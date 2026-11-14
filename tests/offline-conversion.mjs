@@ -17,10 +17,12 @@ const server=createServer(async(req,res)=>{try{
 await new Promise(ok=>server.listen(4173,'127.0.0.1',ok));
 await mkdir(downloads,{recursive:true});
 
-const engine=process.env.PLAYWRIGHT_BROWSER==='webkit'?webkit:chromium;\nconst browser=await engine.launch({headless:true,...(engine===chromium?{args:['--no-sandbox']}:{})});
+const engine=process.env.PLAYWRIGHT_BROWSER==='webkit'?webkit:chromium;
+const browser=await engine.launch({headless:true,...(engine===chromium?{args:['--no-sandbox']}:{})});
 let failures=[];
 try{
-  const device=process.env.PLAYWRIGHT_BROWSER==='webkit'?devices['iPhone 13']:{};\n  const ctx=await browser.newContext({...device,acceptDownloads:true,serviceWorkers:'allow'}),p=await ctx.newPage();
+  const device=process.env.PLAYWRIGHT_BROWSER==='webkit'?devices['iPhone 13']:{};
+  const ctx=await browser.newContext({...device,acceptDownloads:true,serviceWorkers:'allow'}),p=await ctx.newPage();
   const errors=[],external=[];
   p.on('pageerror',e=>errors.push(e.message));
   p.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173'))external.push(r.url());});
