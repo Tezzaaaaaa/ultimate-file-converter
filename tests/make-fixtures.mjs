@@ -8,7 +8,7 @@ await mkdir(out,{recursive:true});
 
 const ff=(args)=>execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y',...args]);
 const media=resolve(out,'source.mp4');
-ff(['-f','lavfi','-i','testsrc=size=160x120:rate=10','-f','lavfi','-i','sine=frequency=1000:sample_rate=44100','-t','2','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',media]);
+ff(['-f','lavfi','-i','testsrc=size=640x360:rate=24','-f','lavfi','-i','sine=frequency=1000:sample_rate=44100','-t','5','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',media]);
 ff(['-i',media,'-c:v','libvpx','-deadline','realtime','-cpu-used','8','-c:a','libopus',resolve(out,'fixture.webm')]);
 ff(['-i',media,'-c:v','libvpx-vp9','-deadline','realtime','-cpu-used','8','-row-mt','1','-c:a','libopus',resolve(out,'fixture-vp9.webm')]);
 ff(['-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','2','-c:a','libopus',resolve(out,'fixture-audio.webm')]);
