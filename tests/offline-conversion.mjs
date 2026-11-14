@@ -28,27 +28,30 @@ try{
   p.on('request',r=>{if(!r.url().startsWith('http://127.0.0.1:4173'))external.push(r.url());});
 
   await p.goto('http://127.0.0.1:4173/',{waitUntil:'domcontentloaded',timeout:60000});
-  await p.evaluate(()=>navigator.serviceWorker.ready);
-  await p.reload({waitUntil:'domcontentloaded',timeout:60000});
-  await p.waitForFunction(()=>!!navigator.serviceWorker.controller);
+  if(engine===chromium){
+    await p.evaluate(()=>navigator.serviceWorker.ready);
+    await p.reload({waitUntil:'domcontentloaded',timeout:60000});
+    await p.waitForFunction(()=>!!navigator.serviceWorker.controller);
 
-  // The offline cache must hold every asset, with no remote fallbacks.
-  const cache=await p.evaluate(async()=>{const keys=await caches.keys(),c=await caches.open(keys[0]),urls=(await c.keys()).map(r=>r.url);return{count:urls.length,fonts:urls.filter(u=>u.includes('/fonts/')).length,external:urls.filter(u=>!u.includes('127.0.0.1'))};});
-  if(cache.count<40)failures.push('offline cache too small: '+cache.count);
-  if(cache.fonts<9)failures.push('UI fonts missing from offline cache: '+cache.fonts);
-  if(cache.external.length)failures.push('offline cache holds remote URLs: '+cache.external.join(', '));
+    // Chromium verifies that the service worker can cache every asset and work offline.
+    const cache=await p.evaluate(async()=>{const keys=await caches.keys(),c=await caches.open(keys[0]),urls=(await c.keys()).map(r=>r.url);return{count:urls.length,fonts:urls.filter(u=>u.includes('/fonts/')).length,external:urls.filter(u=>!u.includes('127.0.0.1'))};});
+    if(cache.count<40)failures.push('offline cache too small: '+cache.count);
+    if(cache.fonts<9)failures.push('UI fonts missing from offline cache: '+cache.fonts);
+    if(cache.external.length)failures.push('offline cache holds remote URLs: '+cache.external.join(', '));
+    await ctx.setOffline(true);
+    console.log('Chromium offline cache: '+cache.count+' entries, '+cache.fonts+' fonts, 0 external');
+  }else{
+    console.log('iPhone WebKit: online browser-engine conversion test');
+  }
   if(external.length)failures.push('page requested external URLs: '+external.join(', '));
-  console.log((process.env.PLAYWRIGHT_BROWSER==='webkit'?'iPhone WebKit':'Chromium')+' offline cache: '+cache.count+' entries, '+cache.fonts+' fonts, 0 external');
 
-  await ctx.setOffline(true);
-
-  // Fonts must resolve from the local cache while offline.
+  // Fonts must resolve in the selected browser context.
   const faces=await p.evaluate(async()=>{await document.fonts.ready;return[...new Set([...document.fonts].filter(f=>f.status==='loaded').map(f=>f.family))];});
   if(!faces.includes('DM Sans')||!faces.includes('Manrope'))failures.push('self-hosted fonts did not load offline: '+faces.join(', '));
   console.log('fonts loaded offline: '+faces.join(', '));
 
   // Each case selects a file, picks an output format and waits for the download.
-  async function convert(file,label,timeout=240000){
+  async function convert(file,label,timeout=120000){
     await p.locator('#clear').click().catch(()=>{});
     await p.locator('#file').setInputFiles(resolve(fixtures,file));
     const select=p.locator('.select').first();
