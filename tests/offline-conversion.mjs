@@ -48,7 +48,7 @@ try{
   // Fonts must resolve in the selected browser context.
   const faces=await p.evaluate(async()=>{await document.fonts.ready;return[...new Set([...document.fonts].filter(f=>f.status==='loaded').map(f=>f.family))];});
   if(!faces.includes('DM Sans')||!faces.includes('Manrope'))failures.push('self-hosted fonts did not load offline: '+faces.join(', '));
-  console.log('fonts loaded offline: '+faces.join(', '));
+  console.log('fonts loaded: '+faces.join(', '));
 
   // Each case selects a file, picks an output format and waits for the download.
   async function convert(file,label,timeout=120000){
@@ -114,4 +114,4 @@ try{
 }finally{await browser.close();server.close();}
 
 if(failures.length){console.error('\n'+failures.length+' offline regression(s) failed:\n- '+failures.join('\n- '));process.exit(1);}
-console.log('\nPASS: all offline conversion checks succeeded with the network disabled.');
+console.log('\nPASS: all '+(engine===webkit?'iPhone WebKit':'offline Chromium')+' conversion checks succeeded.');
