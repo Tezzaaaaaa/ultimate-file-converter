@@ -32,4 +32,6 @@ jobs:
       - name: Create conversion test fixtures
         run: npm run fixtures
       - name: Verify offline conversions
-        run: npm run test:offline\n      - name: Verify WebM conversions in iPhone WebKit\n        run: PLAYWRIGHT_BROWSER=webkit npm run test:offline
+        run: npm run test:offline
+      - name: Verify WebM conversions in iPhone WebKit
+        run: PLAYWRIGHT_BROWSER=webkit npm run test:offline
