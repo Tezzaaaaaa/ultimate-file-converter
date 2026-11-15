@@ -358,7 +358,37 @@ function tagArgs(ext, src = 0) {
   return args;
 }
 
-function commandFor(sourceKind, ext, inputName, outputName) {
+async function inspectVideo(inputPath, fileName) {
+  ffmpegLog = [];
+  const code = await withTimeout(
+    ffmpeg.exec(['-hide_banner', '-i', inputPath]),
+    60000,
+    fileName + ': reading video stream information timed out.'
+  );
+  const lines = [...ffmpegLog];
+  const videoLine = lines.find(line => /\\bVideo:\\s/.test(line)) || '';
+  const audioLine = lines.find(line => /\\bAudio:\\s/.test(line)) || '';
+  const videoCodec = videoLine.match(/\\bVideo:\\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
+  const audioCodec = audioLine.match(/\\bAudio:\\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
+  const pixelFormat = videoLine.match(/\\b(?:yuv|yuva|p010|p012|rgb|gbr)[a-z0-9_]*\\b/i)?.[0] || '';
+  const tenBit = /(?:p10|10le|p12|12le|p16|16le)/i.test(pixelFormat);
+  const hdr = /\\b(?:bt2020|smpte2084|arib-std-b67)\\b/i.test(videoLine);
+  const colorArgs = [];
+  if (/\\bbt2020\\b/i.test(videoLine)) colorArgs.push('-color_primaries', 'bt2020');
+  if (/\\bsmpte2084\\b/i.test(videoLine)) colorArgs.push('-color_trc', 'smpte2084');
+  else if (/\\barib-std-b67\\b/i.test(videoLine)) colorArgs.push('-color_trc', 'arib-std-b67');
+  if (/\\bbt2020nc\\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt2020nc');
+  else if (/\\bbt709\\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt709');
+  if (/\\(pc,/i.test(videoLine)) colorArgs.push('-color_range', 'pc');
+  else if (/\\(tv,/i.test(videoLine)) colorArgs.push('-color_range', 'tv');
+
+  if (code !== 0 && !videoLine && !audioLine) {
+    throw new Error(fileName + ': FFmpeg could not identify an audio or video stream. ' + (lines.slice(-3).join(' ') || ''));
+  }
+  return { videoCodec, audioCodec, pixelFormat, tenBit, hdr, colorArgs };
+}
+
+function commandFor(sourceKind, ext, inputName, outputName, mediaInfo = null) {
   const args = ['-y'];
 
   if (sourceKind === 'Audio' && groups.Video.some(l => formats[l] === ext && ext !== 'gif')) {
@@ -380,20 +410,51 @@ function commandFor(sourceKind, ext, inputName, outputName) {
 
   args.push('-i', inputName);
 
-  // Normalise WebM and other video containers to a broadly compatible MP4.
-  // Explicit optional stream maps prevent subtitle/data/attachment streams from
-  // interfering with muxing, while still supporting video-only and audio-only WebM.
+  // Build an MP4 without needlessly re-encoding streams that are already
+  // QuickTime-compatible. Preserve 10-bit HDR by using the bundled 10-bit HEVC
+  // encoder for VP9/other 10-bit sources instead of silently reducing them to 8-bit.
   if (sourceKind === 'Video' && ext === 'mp4') {
+    const info = mediaInfo || {};
     args.push(
+      '-i', inputName,
       '-map', '0:v:0?', '-map', '0:a:0?',
+      '-map_metadata', '0', '-map_chapters', '0',
       '-sn', '-dn',
-      ...tagArgs(ext),
       '-movflags', '+faststart+use_metadata_tags',
-      '-max_muxing_queue_size', '2048',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-threads', '1',
-      '-c:a', 'aac', '-b:a', '160k', '-threads', '1',
-      outputName
+      '-max_muxing_queue_size', '2048'
     );
+
+    const copyVideo = info.videoCodec === 'hevc' ||
+      (info.videoCodec === 'h264' && !info.tenBit);
+    if (info.videoCodec && copyVideo) {
+      args.push('-c:v', 'copy');
+      if (info.videoCodec === 'hevc') args.push('-tag:v', 'hvc1');
+    } else if (info.videoCodec && info.tenBit) {
+      const x265Params = [
+        'pools=none', 'frame-threads=1', 'wpp=0',
+        'rc-lookahead=5', 'bframes=2', 'ref=2', 'repeat-headers=1'
+      ];
+      if (info.hdr) x265Params.push('hdr-opt=1');
+      args.push(
+        '-c:v', 'libx265', '-preset', 'ultrafast', '-crf', '12',
+        '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1', '-threads', '1',
+        '-x265-params', x265Params.join(':'),
+        ...info.colorArgs
+      );
+    } else if (info.videoCodec) {
+      args.push(
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
+        '-pix_fmt', 'yuv420p', '-threads', '1'
+      );
+    }
+
+    if (!info.videoCodec) args.push('-vn');
+    if (['aac', 'mp3', 'alac'].includes(info.audioCodec)) {
+      args.push('-c:a', 'copy');
+    } else if (info.audioCodec) {
+      args.push('-c:a', 'aac', '-b:a', '320k', '-threads', '1');
+    }
+    args.push(outputName);
     return args;
   }
 
@@ -799,7 +860,10 @@ async function convertOne(file, index, total) {
         '[0:v]fps=12,scale=1280:-1:flags=lanczos[x];[x][1:v]paletteuse[v]',
         '-map', '[v]', '-an', '-loop', '0', out], file.name);
     } else {
-      await run(commandFor(kind, ext, inputPath, out), file.name);
+      const mediaInfo = kind === 'Video' && ext === 'mp4'
+        ? await inspectVideo(inputPath, file.name)
+        : null;
+      await run(commandFor(kind, ext, inputPath, out, mediaInfo), file.name);
     }
 
     const data = await ffmpeg.readFile(out);
