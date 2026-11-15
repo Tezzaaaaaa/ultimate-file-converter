@@ -451,16 +451,12 @@ function commandFor(sourceKind, ext, inputName, outputName, mediaInfo = null) {
       args.push('-c:v', 'copy');
       if (info.videoCodec === 'hevc') args.push('-tag:v', 'hvc1');
     } else if (info.videoCodec && info.tenBit) {
-      const x265Params = [
-        'pools=none', 'frame-threads=1', 'wpp=0',
-        'rc-lookahead=5', 'bframes=2', 'ref=2', 'repeat-headers=1'
-      ];
-      if (info.hdr) x265Params.push('hdr-opt=1');
+      // 10-bit/HDR sources are converted to 8-bit H.264. A single-threaded WebAssembly x265
+      // encode cannot finish 4K/HDR clips in a usable time (it appeared stuck at 10%), and
+      // H.264 plays everywhere. HDR colour tags are dropped because the output is SDR 8-bit.
       args.push(
-        '-c:v', 'libx265', '-preset', 'ultrafast', '-crf', '12',
-        '-pix_fmt', 'yuv420p10le', '-tag:v', 'hvc1', '-threads', '1',
-        '-x265-params', x265Params.join(':'),
-        ...info.colorArgs
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
+        '-pix_fmt', 'yuv420p', '-threads', '1'
       );
     } else if (info.videoCodec) {
       args.push(

@@ -73,8 +73,8 @@ try{
     ['fixture.webm','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'H.264 MP4'],
     ['fixture-vp9.webm','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'VP9 to H.264 MP4'],
     ['fixture.mkv','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'MKV to H.264 MP4'],
-    ['fixture-4k-10bit.webm','MP4',buf=>buf.includes(Buffer.from('hvcC'))||buf.includes(Buffer.from('hvc1')),'4K 10-bit HDR VP9 to HEVC MP4'],
-    ['fixture-4k-10bit.mkv','MP4',buf=>buf.includes(Buffer.from('hvcC'))||buf.includes(Buffer.from('hvc1')),'4K 10-bit HDR MKV to HEVC MP4'],
+    ['fixture-4k-10bit.webm','MP4',buf=>buf.includes(Buffer.from('avcC')),'4K 10-bit HDR VP9 to H.264 MP4'],
+    ['fixture-4k-10bit.mkv','MP4',buf=>buf.includes(Buffer.from('avcC')),'4K 10-bit HDR MKV to H.264 MP4'],
     ['fixture-audio.webm','MP4',buf=>buf.includes(Buffer.from('mp4a')),'audio-only WebM to AAC MP4'],
     // Regression: the bundled mjpeg encoder aborted on video input.
     ['fixture.webm','JPG',buf=>buf[0]===0xFF&&buf[1]===0xD8&&buf[buf.length-2]===0xFF&&buf[buf.length-1]===0xD9,'valid JPEG'],
@@ -103,12 +103,11 @@ try{
         const names=probe.streams.map(stream=>stream.codec_type+':'+stream.codec_name);
         if(!probe.format?.format_name?.split(',').includes('mp4'))throw Error('output is not a valid MP4 container');
         const hdrCase=/fixture-4k-10bit/.test(file);
-        const expected=file==='fixture-audio.webm'?['audio:aac']:hdrCase?['video:hevc','audio:aac']:['video:h264','audio:aac'];
+        const expected=file==='fixture-audio.webm'?['audio:aac']:['video:h264','audio:aac'];
         if(expected.some(codec=>!names.includes(codec)))throw Error('expected streams missing: '+names.join(', '));
         if(hdrCase){
           const video=probe.streams.find(stream=>stream.codec_type==='video');
-          if(video.pix_fmt!=='yuv420p10le')throw Error('10-bit video was not preserved: '+video.pix_fmt);
-          if(video.color_primaries!=='bt2020'||video.color_transfer!=='smpte2084'||video.color_space!=='bt2020nc')throw Error('HDR colour metadata was not preserved: '+JSON.stringify(video));
+          if(video.pix_fmt!=='yuv420p')throw Error('expected 8-bit SDR output, got '+video.pix_fmt);
         }
       }
       console.log('PASS: '+file+' -> '+label+' ('+description+', '+(buf.length/1024).toFixed(1)+' KB)');

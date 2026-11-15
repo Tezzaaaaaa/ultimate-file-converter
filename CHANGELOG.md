@@ -6,6 +6,8 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- 10-bit/HDR video now converts to 8-bit H.264 MP4. The single-threaded WebAssembly x265 path never
+  finished 4K clips (stuck at 10%) and blocked deploys.
 - Progress no longer sits at 10% for sources without a duration (browser-recorded WebM, screen
   captures, live streams). FFmpeg reports no progress fraction for them, so the bar now follows
   the processed media time ("0:12 processed") instead of freezing until the file finishes.
