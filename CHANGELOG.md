@@ -6,6 +6,8 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Large videos (over 100 MB) convert to MP4 about twice as fast (ultrafast preset, capped at 720p) and
+  the conversion timeout is 90 minutes instead of 15, so multi-minute music videos finish on phones.
 - 10-bit/HDR video now converts to 8-bit H.264 MP4. The single-threaded WebAssembly x265 path never
   finished 4K clips (stuck at 10%) and blocked deploys.
 - Progress no longer sits at 10% for sources without a duration (browser-recorded WebM, screen

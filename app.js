@@ -326,8 +326,8 @@ async function run(args, name) {
     // Large media files can take time, but the UI must not wait indefinitely.
     code = await withTimeout(
       ffmpeg.exec(args),
-      15 * 60 * 1000,
-      name + ': conversion timed out after 15 minutes. Try a smaller file or a different output format.'
+      90 * 60 * 1000,
+      name + ': conversion timed out after 90 minutes. Try a smaller file or a different output format.'
     );
   } catch (error) {
     // A timed-out FFmpeg worker may still be busy. Reset it so Retry starts a fresh engine.
@@ -407,7 +407,21 @@ async function inspectVideo(inputPath, fileName) {
   if (!videoLine && !audioLine) {
     throw new Error(fileName + ': FFmpeg could not identify an audio or video stream. ' + (lines.slice(-3).join(' ') || 'Exit code ' + code));
   }
-  return { videoCodec, audioCodec, pixelFormat, tenBit, hdr, colorArgs };
+  const dims = videoLine.match(/,\s*(\d{3,5})x(\d{3,5})/);
+  const height = dims ? Number(dims[2]) : 0;
+  return { videoCodec, audioCodec, pixelFormat, tenBit, hdr, colorArgs, height };
+}
+
+// Single-threaded WebAssembly H.264 encoding is slow, especially on phones. Large files use the
+// fastest preset and are capped at 720p so a multi-minute music video finishes in a sensible time.
+function h264Args(info) {
+  const large = Boolean(info.large);
+  const args = [
+    '-c:v', 'libx264', '-preset', large ? 'ultrafast' : 'veryfast', '-crf', large ? '23' : '18',
+    '-pix_fmt', 'yuv420p', '-threads', '1'
+  ];
+  if (large && info.height > 720) args.push('-vf', 'scale=-2:720');
+  return args;
 }
 
 function commandFor(sourceKind, ext, inputName, outputName, mediaInfo = null) {
@@ -454,15 +468,9 @@ function commandFor(sourceKind, ext, inputName, outputName, mediaInfo = null) {
       // 10-bit/HDR sources are converted to 8-bit H.264. A single-threaded WebAssembly x265
       // encode cannot finish 4K/HDR clips in a usable time (it appeared stuck at 10%), and
       // H.264 plays everywhere. HDR colour tags are dropped because the output is SDR 8-bit.
-      args.push(
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
-        '-pix_fmt', 'yuv420p', '-threads', '1'
-      );
+      args.push(...h264Args(info));
     } else if (info.videoCodec) {
-      args.push(
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18',
-        '-pix_fmt', 'yuv420p', '-threads', '1'
-      );
+      args.push(...h264Args(info));
     }
 
     if (!info.videoCodec) args.push('-vn');
@@ -875,7 +883,7 @@ async function convertOne(file, index, total) {
         '-map', '[v]', '-an', '-loop', '0', out], file.name);
     } else {
       const mediaInfo = kind === 'Video' && ext === 'mp4'
-        ? await inspectVideo(inputPath, file.name)
+        ? Object.assign(await inspectVideo(inputPath, file.name), { large: file.size > 100 * 1024 * 1024 })
         : null;
       await run(commandFor(kind, ext, inputPath, out, mediaInfo), file.name);
     }
