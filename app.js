@@ -248,6 +248,14 @@ async function loadEngine() {
     }
   });
 
+  // Keep the FFmpeg progress event as the primary progress source. Log timestamps
+  // remain a fallback for builds or inputs that do not emit progress events.
+  ffmpeg.on('progress', ({ progress }) => {
+    if (Number.isFinite(progress)) {
+      onFileProgress(Math.max(0, Math.min(1, progress)));
+    }
+  });
+
   try {
     setProgress(5, 'Loading local FFmpeg core…');
     const coreURL = CORE_BASE + 'ffmpeg-core.js';
