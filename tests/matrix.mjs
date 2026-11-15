@@ -13,7 +13,7 @@ const fails=[];let n=0;
 for(const f of(await readdir(dir)).sort().filter(x=>filter.test(x))){
   await p.locator('#clear').click().catch(()=>{});await p.locator('#file').setInputFiles(resolve(dir,f));
   const labels=await p.locator('.select').first().locator('option').allTextContents();
-  for(const label of labels){
+  for(const label of labels.filter(l=>!process.env.LABELS||process.env.LABELS.split(',').includes(l))){
     n++;const t0=Date.now();
     try{
       await p.locator('#clear').click().catch(()=>{});await p.locator('#file').setInputFiles(resolve(dir,f));
