@@ -6,6 +6,9 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- Progress no longer sits at 10% for sources without a duration (browser-recorded WebM, screen
+  captures, live streams). FFmpeg reports no progress fraction for them, so the bar now follows
+  the processed media time ("0:12 processed") instead of freezing until the file finishes.
 - JPG output no longer aborts the FFmpeg engine. The bundled `mjpeg` encoder crashed
   ("memory access out of bounds") whenever a quality scale was requested, so image-to-JPG,
   video-to-JPG and video frame extraction could hang indefinitely. JPEG writes now pin the

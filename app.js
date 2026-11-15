@@ -28,6 +28,7 @@ let ffmpeg = null;
 let ffmpegLog = [];
 let ffmpegDuration = 0;
 let onFileProgress = () => {};
+let onMediaTime = () => {};
 let loaded = false;
 let converting = false;
 let activeRunId = 0;
@@ -242,9 +243,11 @@ async function loadEngine() {
       ffmpegDuration = Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
     }
     const elapsed = message.match(/\btime=(\d+):(\d+):(\d+(?:\.\d+)?)/);
-    if (ffmpegDuration > 0 && elapsed) {
+    if (elapsed) {
       const seconds = Number(elapsed[1]) * 3600 + Number(elapsed[2]) * 60 + Number(elapsed[3]);
-      onFileProgress(Math.min(1, seconds / ffmpegDuration));
+      if (ffmpegDuration > 0) onFileProgress(Math.min(1, seconds / ffmpegDuration));
+      // No usable duration (browser-recorded WebM, live captures): follow processed time instead.
+      else onMediaTime(seconds);
     }
   });
 
@@ -294,6 +297,25 @@ async function mountInputFile(file, index) {
     if (ffmpeg) await ffmpeg.deleteDir(mountPoint).catch(() => {});
     throw error;
   }
+}
+
+// Reports conversion progress. Uses FFmpeg's fraction when the source has a duration;
+// otherwise falls back to the processed media time so the bar keeps moving instead of
+// sitting at the start percentage until the file finishes.
+function trackProgress(base, span, message) {
+  let known = false;
+  onFileProgress = p => {
+    if (Number.isFinite(p) && p > 0 && p <= 1) {
+      known = true;
+      setProgress(base + span * p, message);
+    }
+  };
+  onMediaTime = seconds => {
+    if (known) return;
+    const share = seconds / (seconds + 45);
+    const m = Math.floor(seconds / 60), sec = Math.floor(seconds % 60);
+    setProgress(base + span * 0.9 * share, message + ' (' + m + ':' + String(sec).padStart(2, '0') + ' processed)');
+  };
 }
 
 async function run(args, name) {
@@ -782,9 +804,7 @@ async function convertOne(file, index, total) {
     const inputPath = mountedInput.path;
     const message = 'Extracting frames from ' + file.name;
     setProgress(base, message);
-    onFileProgress = p => {
-      if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
-    };
+    trackProgress(base, span, message);
 
     try {
       await run(['-y', '-i', inputPath, '-vf', 'fps=1/' + interval, ...jpegArgs(), framePattern], file.name);
@@ -803,6 +823,7 @@ async function convertOne(file, index, total) {
       results.push({ name: file.name.replace(/\.[^.]+$/, '') + '-frames.zip', url: URL.createObjectURL(blob), size: blob.size });
     } finally {
       onFileProgress = () => {};
+    onMediaTime = () => {};
       await mountedInput.cleanup();
     }
     return;
@@ -848,9 +869,7 @@ async function convertOne(file, index, total) {
     setProgress(base, message);
     // Install the progress listener before starting FFmpeg so the first
     // progress event cannot be missed.
-    onFileProgress = p => {
-      if (Number.isFinite(p)) setProgress(base + span * Math.max(0, Math.min(1, p)), message);
-    };
+    trackProgress(base, span, message);
 
     if (kind === 'Video' && ext === 'gif') {
       pal = 'pal-' + index + '.png';
@@ -876,6 +895,7 @@ async function convertOne(file, index, total) {
     });
   } finally {
     onFileProgress = () => {};
+    onMediaTime = () => {};
     if (mountedInput) await mountedInput.cleanup();
     else if (ffmpeg) await ffmpeg.deleteFile(inName).catch(() => {});
     if (ffmpeg) await ffmpeg.deleteFile(out).catch(() => {});
@@ -953,6 +973,7 @@ convert.onclick = async () => {
     convert.innerHTML = '<span>Try again</span>' + icon('arrow', 16);
   } finally {
     onFileProgress = () => {};
+    onMediaTime = () => {};
     converting = false;
     render();
     if (files.length) convert.disabled = false;
