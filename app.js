@@ -401,8 +401,8 @@ async function inspectVideo(inputPath, fileName) {
   else if (/\barib-std-b67\b/i.test(videoLine)) colorArgs.push('-color_trc', 'arib-std-b67');
   if (/\bbt2020nc\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt2020nc');
   else if (/\bbt709\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt709');
-  if (/\\(pc,/i.test(videoLine)) colorArgs.push('-color_range', 'pc');
-  else if (/\\(tv,/i.test(videoLine)) colorArgs.push('-color_range', 'tv');
+  if (/\(pc,/i.test(videoLine)) colorArgs.push('-color_range', 'pc');
+  else if (/\(tv,/i.test(videoLine)) colorArgs.push('-color_range', 'tv');
 
   if (!videoLine && !audioLine) {
     throw new Error(fileName + ': FFmpeg could not identify an audio or video stream. ' + (lines.slice(-3).join(' ') || 'Exit code ' + code));
