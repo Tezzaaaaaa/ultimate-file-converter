@@ -12,6 +12,9 @@ ff(['-f','lavfi','-i','testsrc=size=640x360:rate=24','-f','lavfi','-i','sine=fre
 ff(['-i',media,'-c:v','libvpx','-deadline','realtime','-cpu-used','8','-c:a','libopus',resolve(out,'fixture.webm')]);
 ff(['-i',media,'-c:v','libvpx-vp9','-deadline','realtime','-cpu-used','8','-row-mt','1','-c:a','libopus',resolve(out,'fixture-vp9.webm')]);
 ff(['-i',media,'-map','0','-c','copy',resolve(out,'fixture.mkv')]);
+const hdrWebm=resolve(out,'fixture-4k-10bit.webm');
+ff(['-f','lavfi','-i','testsrc2=size=2880x2160:rate=1','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','2','-c:v','libvpx-vp9','-profile:v','2','-pix_fmt','yuv420p10le','-deadline','realtime','-cpu-used','8','-row-mt','1','-c:a','libopus','-b:a','128k','-color_primaries','bt2020','-color_trc','smpte2084','-colorspace','bt2020nc',hdrWebm]);
+ff(['-i',hdrWebm,'-map','0','-c','copy',resolve(out,'fixture-4k-10bit.mkv')]);
 ff(['-f','lavfi','-i','sine=frequency=440:sample_rate=44100','-t','2','-c:a','libopus',resolve(out,'fixture-audio.webm')]);
 ff(['-i',media,'-vn','-c:a','libmp3lame',resolve(out,'fixture.mp3')]);
 ff(['-f','lavfi','-i','testsrc=size=160x120:rate=1','-frames:v','1',resolve(out,'fixture.png')]);
