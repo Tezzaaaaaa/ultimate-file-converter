@@ -366,19 +366,19 @@ async function inspectVideo(inputPath, fileName) {
     fileName + ': reading video stream information timed out.'
   );
   const lines = [...ffmpegLog];
-  const videoLine = lines.find(line => /\\bVideo:\\s/.test(line)) || '';
-  const audioLine = lines.find(line => /\\bAudio:\\s/.test(line)) || '';
-  const videoCodec = videoLine.match(/\\bVideo:\\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
-  const audioCodec = audioLine.match(/\\bAudio:\\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
-  const pixelFormat = videoLine.match(/\\b(?:yuv|yuva|p010|p012|rgb|gbr)[a-z0-9_]*\\b/i)?.[0] || '';
+  const videoLine = lines.find(line => /\bVideo:\s/.test(line)) || '';
+  const audioLine = lines.find(line => /\bAudio:\s/.test(line)) || '';
+  const videoCodec = videoLine.match(/\bVideo:\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
+  const audioCodec = audioLine.match(/\bAudio:\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
+  const pixelFormat = videoLine.match(/\b(?:yuv|yuva|p010|p012|rgb|gbr)[a-z0-9_]*\b/i)?.[0] || '';
   const tenBit = /(?:p10|10le|p12|12le|p16|16le)/i.test(pixelFormat);
-  const hdr = /\\b(?:bt2020|smpte2084|arib-std-b67)\\b/i.test(videoLine);
+  const hdr = /\b(?:bt2020|smpte2084|arib-std-b67)\b/i.test(videoLine);
   const colorArgs = [];
-  if (/\\bbt2020\\b/i.test(videoLine)) colorArgs.push('-color_primaries', 'bt2020');
-  if (/\\bsmpte2084\\b/i.test(videoLine)) colorArgs.push('-color_trc', 'smpte2084');
-  else if (/\\barib-std-b67\\b/i.test(videoLine)) colorArgs.push('-color_trc', 'arib-std-b67');
-  if (/\\bbt2020nc\\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt2020nc');
-  else if (/\\bbt709\\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt709');
+  if (/\bbt2020\b/i.test(videoLine)) colorArgs.push('-color_primaries', 'bt2020');
+  if (/\bsmpte2084\b/i.test(videoLine)) colorArgs.push('-color_trc', 'smpte2084');
+  else if (/\barib-std-b67\b/i.test(videoLine)) colorArgs.push('-color_trc', 'arib-std-b67');
+  if (/\bbt2020nc\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt2020nc');
+  else if (/\bbt709\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt709');
   if (/\\(pc,/i.test(videoLine)) colorArgs.push('-color_range', 'pc');
   else if (/\\(tv,/i.test(videoLine)) colorArgs.push('-color_range', 'tv');
 
@@ -416,7 +416,6 @@ function commandFor(sourceKind, ext, inputName, outputName, mediaInfo = null) {
   if (sourceKind === 'Video' && ext === 'mp4') {
     const info = mediaInfo || {};
     args.push(
-      '-i', inputName,
       '-map', '0:v:0?', '-map', '0:a:0?',
       '-map_metadata', '0', '-map_chapters', '0',
       '-sn', '-dn',
