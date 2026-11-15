@@ -359,33 +359,42 @@ function tagArgs(ext, src = 0) {
 }
 
 async function inspectVideo(inputPath, fileName) {
-  ffmpegLog = [];
-  const code = await withTimeout(
-    ffmpeg.exec(['-hide_banner', '-i', inputPath]),
-    60000,
-    fileName + ': reading video stream information timed out.'
-  );
-  const lines = [...ffmpegLog];
-  const videoLine = lines.find(line => /\bVideo:\s/.test(line)) || '';
-  const audioLine = lines.find(line => /\bAudio:\s/.test(line)) || '';
-  const videoCodec = videoLine.match(/\bVideo:\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
-  const audioCodec = audioLine.match(/\bAudio:\s*([a-z0-9_]+)/i)?.[1]?.toLowerCase() || '';
-  const pixelFormat = videoLine.match(/\b(?:yuv|yuva|p010|p012|rgb|gbr)[a-z0-9_]*\b/i)?.[0] || '';
-  const tenBit = /(?:p10|10le|p12|12le|p16|16le)/i.test(pixelFormat);
-  const hdr = /\b(?:bt2020|smpte2084|arib-std-b67)\b/i.test(videoLine);
-  const colorArgs = [];
-  if (/\bbt2020\b/i.test(videoLine)) colorArgs.push('-color_primaries', 'bt2020');
-  if (/\bsmpte2084\b/i.test(videoLine)) colorArgs.push('-color_trc', 'smpte2084');
-  else if (/\barib-std-b67\b/i.test(videoLine)) colorArgs.push('-color_trc', 'arib-std-b67');
-  if (/\bbt2020nc\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt2020nc');
-  else if (/\bbt709\b/i.test(videoLine)) colorArgs.push('-colorspace', 'bt709');
-  if (/\(pc,/i.test(videoLine)) colorArgs.push('-color_range', 'pc');
-  else if (/\(tv,/i.test(videoLine)) colorArgs.push('-color_range', 'tv');
+  const probePath = 'probe-' + fileName.replace(/[^a-zA-Z0-9._-]/g, '_') + '.json';
+  try {
+    const code = await withTimeout(
+      ffmpeg.ffprobe([
+        '-v', 'error', '-show_streams', '-show_format', '-of', 'json',
+        inputPath, '-o', probePath
+      ]),
+      60000,
+      fileName + ': reading video stream information timed out.'
+    );
+    if (code !== 0) throw new Error(fileName + ': FFprobe could not inspect this file.');
+    const data = await ffmpeg.readFile(probePath);
+    const probe = JSON.parse(new TextDecoder().decode(data));
+    const video = probe.streams?.find(stream => stream.codec_type === 'video') || null;
+    const audio = probe.streams?.find(stream => stream.codec_type === 'audio') || null;
+    if (!video && !audio) throw new Error(fileName + ': no readable audio or video stream was found.');
 
-  if (!videoLine && !audioLine) {
-    throw new Error(fileName + ': FFmpeg could not identify an audio or video stream. ' + (lines.slice(-3).join(' ') || ''));
+    const pixelFormat = video?.pix_fmt || '';
+    const tenBit = /(?:p10|10le|p12|12le|p16|16le)/i.test(pixelFormat);
+    const colorArgs = [];
+    if (video?.color_primaries && video.color_primaries !== 'unknown') colorArgs.push('-color_primaries', video.color_primaries);
+    if (video?.color_trc && video.color_trc !== 'unknown') colorArgs.push('-color_trc', video.color_trc);
+    if (video?.colorspace && video.colorspace !== 'unknown') colorArgs.push('-colorspace', video.colorspace);
+    if (video?.color_range && video.color_range !== 'unknown') colorArgs.push('-color_range', video.color_range);
+    return {
+      videoCodec: video?.codec_name || '',
+      audioCodec: audio?.codec_name || '',
+      pixelFormat,
+      tenBit,
+      hdr: ['smpte2084', 'arib-std-b67'].includes(video?.color_trc) ||
+        video?.color_primaries === 'bt2020',
+      colorArgs
+    };
+  } finally {
+    await ffmpeg.deleteFile(probePath).catch(() => {});
   }
-  return { videoCodec, audioCodec, pixelFormat, tenBit, hdr, colorArgs };
 }
 
 function commandFor(sourceKind, ext, inputName, outputName, mediaInfo = null) {
