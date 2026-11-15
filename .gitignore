@@ -23,3 +23,5 @@ node_modules/
 tests/fixtures/
 tests/downloads/
 tests/offline-output.mp4
+tests/downloads-matrix/
+tests/matrix/
