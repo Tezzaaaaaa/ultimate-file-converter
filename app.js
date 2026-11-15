@@ -26,6 +26,7 @@ const WORKER_URL = new URL('./ffmpeg/lib/worker.js', import.meta.url).href;
 
 let ffmpeg = null;
 let ffmpegLog = [];
+let ffmpegDuration = 0;
 let onFileProgress = () => {};
 let loaded = false;
 let converting = false;
@@ -233,8 +234,19 @@ async function loadEngine() {
   ffmpeg.on('log', ({ message }) => {
     ffmpegLog.push(message);
     if (ffmpegLog.length > 20) ffmpegLog.shift();
+
+    // FFmpeg's progress event is experimental. Read its normal timestamped
+    // stats instead, using the input duration to report real conversion progress.
+    const duration = message.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+    if (duration) {
+      ffmpegDuration = Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3]);
+    }
+    const elapsed = message.match(/\btime=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+    if (ffmpegDuration > 0 && elapsed) {
+      const seconds = Number(elapsed[1]) * 3600 + Number(elapsed[2]) * 60 + Number(elapsed[3]);
+      onFileProgress(Math.min(1, seconds / ffmpegDuration));
+    }
   });
-  ffmpeg.on('progress', ({ progress }) => onFileProgress(progress));
 
   try {
     setProgress(5, 'Loading local FFmpeg core…');
@@ -278,6 +290,7 @@ async function mountInputFile(file, index) {
 
 async function run(args, name) {
   ffmpegLog = [];
+  ffmpegDuration = 0;
   let code;
   try {
     // Large media files can take time, but the UI must not wait indefinitely.

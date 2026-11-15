@@ -72,6 +72,7 @@ try{
   const cases=[
     ['fixture.webm','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'H.264 MP4'],
     ['fixture-vp9.webm','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'VP9 to H.264 MP4'],
+    ['fixture.mkv','MP4',buf=>buf.includes(Buffer.from('avcC'))||buf.includes(Buffer.from('avc1')),'MKV to H.264 MP4'],
     ['fixture-audio.webm','MP4',buf=>buf.includes(Buffer.from('mp4a')),'audio-only WebM to AAC MP4'],
     // Regression: the bundled mjpeg encoder aborted on video input.
     ['fixture.webm','JPG',buf=>buf[0]===0xFF&&buf[1]===0xD8&&buf[buf.length-2]===0xFF&&buf[buf.length-1]===0xD9,'valid JPEG'],
@@ -95,7 +96,7 @@ try{
       const out=await convert(file,label);
       const buf=await readFile(out);
       if(!check(buf))throw Error('unexpected output content');
-      if(label==='MP4'&&/\.webm$/i.test(file)){
+      if(label==='MP4'&&/\.(webm|mkv)$/i.test(file)){
         const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=format_name:stream=codec_name,codec_type','-of','json',out],{encoding:'utf8'}));
         const names=probe.streams.map(stream=>stream.codec_type+':'+stream.codec_name);
         if(!probe.format?.format_name?.split(',').includes('mp4'))throw Error('output is not a valid MP4 container');
